@@ -3,7 +3,7 @@
 Controllo di fine giornata: registro ClasseViva confrontato con la pianificazione, più l'elenco dei sostegni firmati.
 
 ## Uso
-1. Apri `chiusura-classi.html` con Chrome o Edge (doppio clic). Serve internet perché la pagina carica le librerie per leggere PDF ed Excel; i file però restano sul PC.
+1. Apri `index.html` (oppure la pagina pubblicata su GitHub Pages) con Chrome o Edge (doppio clic). Serve internet perché la pagina carica le librerie per leggere PDF ed Excel; i file però restano sul PC.
 2. Trascina nel riquadro 1 il PDF del registro del giorno, estratto da ClasseViva.
 3. Trascina nel riquadro 2 l'Excel della pianificazione. La pagina usa i primi due fogli, l'orario e la struttura dei codici. In alternativa puoi caricare insieme i due CSV.
 4. Tab **Confronto**: elenca solo le anomalie, divise per classe: docente diverso, materia diversa, ora senza firma, firma non pianificata, supplenza.
