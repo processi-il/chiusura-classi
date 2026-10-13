@@ -1,0 +1,563 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chiusura classi</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<!-- caricare il worker come script fa girare pdf.js nella pagina: funziona anche aprendo il file da disco -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root {
+  --bg: #f6f5f1; --surface: #ffffff; --ink: #1d1d1b; --muted: #6b6a63; --line: #e3e1d9;
+  --accent: #2f5d50; --accent-soft: #e4eee9;
+  --ok: #2e7d4f; --ok-bg: #e6f3eb;
+  --warn: #a35b00; --warn-bg: #fdf0dc;
+  --err: #b3261e; --err-bg: #fbe7e5;
+  --sub: #6b3fa0; --sub-bg: #f0e8f8;
+  --info: #3d5a80; --info-bg: #e7edf5;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+header { padding: 20px 24px 8px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; }
+h1 { font-size: 22px; margin: 0; letter-spacing: -.01em; }
+#dayLabel { color: var(--muted); font-size: 15px; }
+main { padding: 0 24px 40px; max-width: 1200px; }
+.drops { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin: 12px 0 16px; }
+.drop { border: 2px dashed var(--line); border-radius: 10px; background: var(--surface); padding: 14px 16px; cursor: pointer; transition: border-color .15s, background .15s; }
+.drop:hover, .drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.drop b { display: block; font-size: 15px; }
+.drop small { color: var(--muted); }
+.drop .fname { margin-top: 6px; font-size: 13px; color: var(--accent); font-weight: 600; min-height: 1.2em; word-break: break-all; }
+.drop input { display: none; }
+#msg { margin: 0 0 12px; padding: 10px 14px; border-radius: 8px; background: var(--info-bg); color: var(--info); display: none; }
+#msg.err { background: var(--err-bg); color: var(--err); }
+.summary { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.chip { background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; font-size: 13px; }
+.chip b { font-variant-numeric: tabular-nums; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 14px; flex-wrap: wrap; }
+.tabs button { border: 0; background: none; padding: 8px 14px; font: inherit; font-weight: 600; color: var(--muted); border-bottom: 3px solid transparent; cursor: pointer; }
+.tabs button.active { color: var(--accent); border-bottom-color: var(--accent); }
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin-bottom: 12px; }
+.btn { border: 1px solid var(--accent); background: var(--accent); color: #fff; border-radius: 6px; padding: 6px 12px; font: inherit; font-weight: 600; cursor: pointer; }
+.btn.ghost { background: var(--surface); color: var(--accent); }
+.btn.mini { padding: 1px 7px; font-size: 12px; font-weight: 500; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 12px; overflow: hidden; break-inside: avoid; }
+.card h3 { margin: 0; padding: 10px 14px; font-size: 16px; display: flex; gap: 10px; align-items: center; border-bottom: 1px solid var(--line); background: #fbfaf7; }
+.card h3 .count { font-weight: 500; font-size: 13px; color: var(--muted); }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; table-layout: fixed; min-width: 640px; }
+col.c-ora { width: 70px; } col.c-ore { width: 50px; } col.c-esito { width: 30%; } col.c-check { width: 80px; }
+th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
+tr:last-child td { border-bottom: 0; }
+td.ora { white-space: nowrap; font-weight: 700; font-variant-numeric: tabular-nums; }
+.code { font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: var(--muted); }
+.sm { font-size: 12px; color: var(--muted); }
+.badge { display: inline-block; border-radius: 4px; padding: 1px 7px; font-size: 12px; font-weight: 700; white-space: nowrap; margin: 1px 4px 1px 0; }
+.b-ok { background: var(--ok-bg); color: var(--ok); }
+.b-warn { background: var(--warn-bg); color: var(--warn); }
+.b-err { background: var(--err-bg); color: var(--err); }
+.b-sub { background: var(--sub-bg); color: var(--sub); }
+.b-info { background: var(--info-bg); color: var(--info); }
+tr.row-ok td { color: var(--muted); }
+.okline { color: var(--muted); font-size: 13px; margin: 6px 0 14px; }
+
+.box { display: inline-block; width: 16px; height: 16px; border: 1.5px solid var(--ink); border-radius: 3px; }
+.empty { color: var(--muted); padding: 24px 4px; }
+.aliases li { margin: 4px 0; }
+.hidden { display: none !important; }
+.print-title { display: none; }
+@media (max-width: 640px) {
+  header, main { padding-left: 16px; padding-right: 16px; }
+  th, td { padding: 5px 6px; }
+}
+@media print {
+  body { background: #fff; font-size: 11px; }
+  header, .drops, .tabs, .toolbar, #msg, .summary, .no-print { display: none !important; }
+  main { padding: 0; max-width: none; }
+  .print-title { display: block; font-size: 15px; font-weight: 700; margin: 0 0 8px; }
+  .card { border-color: #999; border-radius: 0; margin-bottom: 8px; }
+  .card h3 { background: #eee; padding: 5px 8px; font-size: 13px; }
+  th, td { padding: 3px 6px; border-color: #bbb; }
+  .badge { border: 1px solid currentColor; }
+  .table-wrap { overflow: visible; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Chiusura classi</h1>
+  <span id="dayLabel">Carica il registro del giorno e la pianificazione</span>
+</header>
+<main>
+  <div class="drops">
+    <label class="drop" id="dropPdf">
+      <b>1 · Registro ClasseViva (PDF)</b>
+      <small>Trascina qui il PDF della giornata o clicca per sceglierlo</small>
+      <div class="fname" id="namePdf"></div>
+      <input type="file" id="inPdf" accept=".pdf">
+    </label>
+    <label class="drop" id="dropPlan">
+      <b>2 · Pianificazione (Excel)</b>
+      <small>Il file .xlsx (primi due fogli), oppure i due CSV pianificazione + struttura</small>
+      <div class="fname" id="namePlan"></div>
+      <input type="file" id="inPlan" accept=".xlsx,.xlsm,.xls,.csv" multiple>
+    </label>
+  </div>
+  <div id="msg"></div>
+
+  <div id="results" class="hidden">
+    <div class="summary" id="summary"></div>
+    <div class="tabs">
+      <button data-tab="confronto" class="active">Confronto registro / pianificazione</button>
+      <button data-tab="sostegni">Sostegni</button>
+      <button data-tab="alias">Equivalenze</button>
+    </div>
+
+    <section id="tab-confronto">
+      <div class="toolbar">
+        <label><input type="checkbox" id="onlyIssues" checked> Mostra solo le anomalie</label>
+        <button class="btn ghost" onclick="window.print()">Stampa</button>
+      </div>
+      <div class="print-title" id="ptConfronto"></div>
+      <div id="confronto"></div>
+    </section>
+
+    <section id="tab-sostegni" class="hidden">
+      <div class="toolbar">
+        <button class="btn ghost" onclick="window.print()">Stampa sostegni</button>
+        <span class="sm">Ogni riga è una firma di sostegno, da spuntare sul registro cartaceo.</span>
+      </div>
+      <div class="print-title" id="ptSostegni"></div>
+      <div id="sostegni"></div>
+    </section>
+
+    <section id="tab-alias" class="hidden">
+      <p class="sm">Le equivalenze dicono alla pagina che un nome del registro corrisponde a quello della pianificazione (es. materia "TEORIA DI CUCI" = "TEORIA DI CUCINA"). Si aggiungono con il bottone «=» accanto a un'anomalia e restano salvate in questo browser.</p>
+      <div id="aliasList"></div>
+    </section>
+  </div>
+</main>
+
+<script>
+/*CORE-START*/
+const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
+const MESI = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
+const TIPI = ['Attività di laboratorio', 'Compresenza', 'Supplenza', 'Lezione', 'Spiegazione', 'Verifica', 'Esercitazione', 'Interrogazione'];
+
+const norm = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+const normCode = s => String(s ?? '').toUpperCase().replace(/\s+/g, '');
+const pad = n => String(n).padStart(2, '0');
+const isoDate = (y, m, d) => `${y}-${pad(m)}-${pad(d)}`;
+
+// ---------- Registro (PDF) ----------
+// pages: [{ items: [{ str, x, y }] }] con y che cresce verso l'alto (coordinate pdf.js)
+function parseRegistro(pages) {
+  const registers = [];
+  let date = null, cur = null;
+  for (const page of pages) {
+    const items = page.items.filter(it => it.str.trim());
+    const header = items.find(it => /Registro di classe/.test(it.str));
+    if (header) {
+      const m = header.str.match(/Registro di classe\s+(.+?)-[A-Z]{4}\d+\S*\s+per il\s+(\d{1,2})\s+(\w+)\s+(\d{4})/i);
+      const raw = m ? m[1].trim() : header.str.replace(/.*Registro di classe\s+/, '').trim();
+      const classe = raw.replace(/\s+APP$/i, '').replace(/_.*$/, '').trim().toUpperCase();
+      if (m && !date) {
+        const mese = MESI.indexOf(m[3].toLowerCase()) + 1;
+        if (mese) date = isoDate(m[4], mese, m[2]);
+      }
+      cur = { classe, raw, entries: [] };
+      registers.push(cur);
+    }
+    if (!cur) continue;
+
+    // posizione delle colonne dalle intestazioni (con valori di riserva)
+    const hx = name => items.find(it => it.str.trim() === name)?.x;
+    const xMat = hx('Materia') ?? 68, xIns = hx('Insegnante') ?? 138, xArg = hx('Argomenti') ?? 238;
+    const yGiust = items.find(it => /^Giustificazioni/.test(it.str.trim()))?.y ?? -Infinity;
+    const yHead = items.find(it => it.str.trim() === 'Ora' && it.x < xMat)?.y ?? Infinity;
+
+    const anchors = [];
+    for (const it of items) {
+      const m = it.str.trim().match(/^([IVX]+)\s*\((\d+)\s*hh\)$/);
+      if (m && it.x < xMat - 2 && it.y < yHead && it.y > yGiust && ROMAN.indexOf(m[1]) > 0) {
+        anchors.push({ y: it.y, ora: ROMAN.indexOf(m[1]), ore: +m[2], args: [] });
+      }
+    }
+    if (!anchors.length) continue;
+    const near = (it, a) => Math.abs(it.y - a.y) <= 3;
+    const cell = (a, x0, x1) => items.filter(it => near(it, a) && it.x >= x0 && it.x < x1)
+      .sort((p, q) => p.x - q.x).map(it => it.str.trim()).join(' ').replace(/\s+/g, ' ');
+    // argomenti: il testo parte all'altezza della sua riga e se va a capo scende verso la riga successiva,
+    // quindi ogni pezzo appartiene alla riga più in basso che inizia sopra di lui
+    for (const it of items) {
+      if (it.x < xArg - 3 || it.y >= yHead - 2 || it.y <= yGiust + 2) continue;
+      let best = null;
+      for (const a of anchors) if (a.y + 5 >= it.y && (!best || a.y < best.y)) best = a;
+      (best ?? anchors[0]).args.push(it);
+    }
+    for (const a of anchors) {
+      const testo = a.args.sort((p, q) => q.y - p.y || p.x - q.x).map(it => it.str.trim()).join(' ').replace(/\s+/g, ' ');
+      const tipo = TIPI.find(t => testo.startsWith(t)) ?? '';
+      cur.entries.push({
+        ora: a.ora, ore: a.ore,
+        materia: cell(a, xMat - 3, xIns - 3),
+        docente: cell(a, xIns - 3, xArg - 3),
+        tipo, argomento: tipo ? testo.slice(tipo.length).trim() : testo,
+      });
+    }
+  }
+  for (const r of registers) r.entries.sort((p, q) => p.ora - q.ora);
+  return { date, registers };
+}
+
+const isSostegno = e => norm(e.materia).startsWith('SOSTEGNO');
+
+// ---------- Pianificazione (foglio 1) ----------
+function cellDate(v) {
+  if (v instanceof Date) return isoDate(v.getFullYear(), v.getMonth() + 1, v.getDate());
+  if (typeof v === 'number' && v > 20000) {
+    const d = new Date(Date.UTC(1899, 11, 30) + Math.round(v) * 864e5);
+    return isoDate(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
+  }
+  const s = String(v ?? '').trim();
+  let m = s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/);
+  if (m) return isoDate(m[3].length === 2 ? '20' + m[3] : m[3], +m[2], +m[1]);
+  m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? isoDate(m[1], +m[2], +m[3]) : null;
+}
+function cellHour(v) {
+  if (v instanceof Date) return v.getHours();
+  if (typeof v === 'number') return Math.floor((v % 1) * 24 + 1e-6);
+  const m = String(v ?? '').match(/(\d{1,2})[:.](\d{2})/);
+  return m ? +m[1] : null;
+}
+function findHeader(rows, names) {
+  for (let i = 0; i < Math.min(rows.length, 20); i++) {
+    const h = rows[i].map(c => String(c ?? '').trim().toLowerCase());
+    if (names.every(n => h.includes(n))) return { i, h };
+  }
+  return null;
+}
+function parsePianificazione(rows) {
+  const hd = findHeader(rows, ['data', 'dalle']);
+  if (!hd) throw new Error('Nel foglio della pianificazione non trovo le colonne "data" e "dalle".');
+  const cData = hd.h.indexOf('data'), cDalle = hd.h.indexOf('dalle');
+  const classCols = [];
+  rows[hd.i].forEach((c, j) => { const s = String(c ?? '').trim().toUpperCase(); if (/^\d[A-Z]{1,3}$/.test(s)) classCols.push([j, s]); });
+  const days = {};
+  for (const r of rows.slice(hd.i + 1)) {
+    const d = cellDate(r[cData]); const h = cellHour(r[cDalle]);
+    if (!d || h == null) continue;
+    const ora = h - 7; // 08:30 = ora I
+    if (ora < 1 || ora > 12) continue;
+    const day = days[d] ??= {};
+    for (const [j, cl] of classCols) {
+      const v = String(r[j] ?? '').trim();
+      if (!v) continue;
+      const codes = v.split('/').map(normCode).filter(Boolean);
+      (day[cl] ??= {})[ora] = [...(day[cl][ora] ?? []), ...codes];
+    }
+  }
+  return { classi: classCols.map(c => c[1]), days };
+}
+
+// ---------- Struttura (foglio 2) ----------
+function parseStruttura(rows) {
+  const hd = findHeader(rows, ['anno', 'sezione', 'codici']);
+  if (!hd) throw new Error('Nel foglio della struttura non trovo le colonne "anno", "sezione" e "Codici".');
+  const col = n => hd.h.findIndex(c => c.startsWith(n));
+  const cA = col('anno'), cS = col('sezione'), cD = col('disciplina'), cC = col('codici'), cDoc = col('docente'), cSup = col('supplenza');
+  const byClass = {}, global = {};
+  for (const r of rows.slice(hd.i + 1)) {
+    const code = normCode(r[cC]);
+    if (!code) continue;
+    const classe = (String(r[cA] ?? '') + String(r[cS] ?? '')).toUpperCase().replace(/\s+/g, '');
+    const info = { code, disciplina: String(r[cD] ?? '').trim(), docente: String(r[cDoc] ?? '').trim(), supplenza: /x/i.test(String(r[cSup] ?? '')) };
+    (byClass[classe] ??= {})[code] = info;
+    global[code] ??= info;
+  }
+  return { byClass, global };
+}
+function lookupCode(strutt, classe, code) {
+  const info = strutt.byClass[classe]?.[code];
+  if (info) return info;
+  const g = strutt.global[code];
+  if (g) return { ...g, altraClasse: true };
+  const [pre, suf = ''] = code.split('_');
+  return { code, disciplina: '', docente: '', sconosciuto: true, suffisso: suf, prefisso: pre };
+}
+
+// ---------- Confronto ----------
+// aliases: Set di stringhe "m|FIRMATO|PIANIFICATO" o "d|FIRMATO|PIANIFICATO" (valori già normalizzati)
+const PAROLINE = new Set(['DI', 'DEL', 'DELLA', 'DELLO', 'DELL', 'DEI', 'DEGLI', 'DELLE', 'E', 'ED', 'IL', 'LO', 'LA', 'PER', 'A', 'AL', 'IN', 'CON']);
+const normMateria = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase()
+  .split(/[^A-Z0-9]+/).filter(w => w && !PAROLINE.has(w)).join('');
+function materiaOk(firmata, p, aliases) {
+  const f = norm(firmata), d = norm(p.disciplina);
+  if (!d) return null; // disciplina sconosciuta
+  const f2 = normMateria(firmata), d2 = normMateria(p.disciplina);
+  return f.startsWith(d) || d.startsWith(f) || f2.startsWith(d2) || d2.startsWith(f2) || aliases.has(`m|${f}|${d}`);
+}
+function docenteOk(firmato, p, aliases) {
+  const f = norm(firmato), d = norm(p.docente);
+  if (!d) return p.suffisso ? f.startsWith(norm(p.suffisso)) : null;
+  return f.startsWith(d) || aliases.has(`d|${f}|${d}`);
+}
+function confronta(registro, plan, strutt, date, aliases) {
+  const day = plan.days[date] ?? {};
+  const regByClass = Object.fromEntries(registro.registers.map(r => [r.classe, r]));
+  const classi = plan.classi.filter(c => day[c] || regByClass[c]);
+  const ignorate = registro.registers.map(r => r.classe).filter(c => !plan.classi.includes(c));
+  const out = [];
+  for (const classe of classi) {
+    const reg = regByClass[classe];
+    const firmate = {};
+    for (const e of reg?.entries ?? []) {
+      if (isSostegno(e)) continue;
+      for (let k = 0; k < e.ore; k++) (firmate[e.ora + k] ??= []).push(e);
+    }
+    const pian = day[classe] ?? {};
+    const ore = [...new Set([...Object.keys(pian), ...Object.keys(firmate)].map(Number))].sort((a, b) => a - b);
+    const righe = [];
+    for (const ora of ore) {
+      const P = (pian[ora] ?? []).map(c => lookupCode(strutt, classe, c));
+      const S = [...(firmate[ora] ?? [])];
+      const usate = new Set();
+      for (const s of S) {
+        let best = null, bestScore = -1;
+        P.forEach((p, i) => {
+          if (usate.has(i)) return;
+          const m = materiaOk(s.materia, p, aliases), d = docenteOk(s.docente, p, aliases);
+          const score = (d ? 2 : 0) + (m ? 1 : 0);
+          if (score > bestScore) { best = { i, p, m, d }; bestScore = score; }
+        });
+        const esiti = [];
+        if (!best) esiti.push(s.tipo === 'Compresenza' ? 'compresenza' : 'non-pianificata');
+        else {
+          usate.add(best.i);
+          if (best.p.sconosciuto) esiti.push('codice-sconosciuto');
+          if (best.d === false) esiti.push('docente');
+          if (best.m === false) esiti.push('materia');
+          if (!esiti.length) esiti.push('ok');
+        }
+        if (s.tipo === 'Supplenza') esiti.push('supplenza');
+        righe.push({ ora, p: best?.p ?? null, s, esiti });
+      }
+      P.forEach((p, i) => { if (!usate.has(i)) righe.push({ ora, p, s: null, esiti: [reg ? 'mancante' : 'registro-assente'] }); });
+    }
+    out.push({ classe, presente: !!reg, righe });
+  }
+  return { date, classi: out, ignorate };
+}
+
+function sostegni(registro) {
+  const out = [];
+  for (const r of registro.registers) {
+    const righe = [];
+    for (const e of r.entries.filter(isSostegno)) {
+      const conChi = r.entries.filter(x => !isSostegno(x) && x.ora < e.ora + e.ore && e.ora < x.ora + x.ore);
+      righe.push({ ...e, conChi });
+    }
+    if (righe.length) out.push({ classe: r.classe, righe });
+  }
+  return out;
+}
+/*CORE-END*/
+
+// ---------- UI ----------
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const ESITI = {
+  'ok': ['OK', 'b-ok'],
+  'docente': ['Docente diverso', 'b-warn'],
+  'materia': ['Materia diversa', 'b-warn'],
+  'mancante': ['Ora pianificata senza firma', 'b-err'],
+  'registro-assente': ['Registro della classe assente nel PDF', 'b-err'],
+  'non-pianificata': ['Firma non pianificata', 'b-err'],
+  'compresenza': ['Compresenza non pianificata', 'b-info'],
+  'supplenza': ['Supplenza', 'b-sub'],
+  'codice-sconosciuto': ['Codice non presente in struttura', 'b-info'],
+};
+const ALIAS_KEY = 'chiusura-classi.alias';
+let state = { pdfPages: null, pdfName: '', plan: null, strutt: null, planName: '' };
+
+function loadAliases() { try { return new Set(JSON.parse(localStorage.getItem(ALIAS_KEY) || '[]')); } catch { return new Set(); } }
+function saveAliases(set) { try { localStorage.setItem(ALIAS_KEY, JSON.stringify([...set])); } catch {} }
+
+function showMsg(text, err) { const m = $('msg'); m.textContent = text; m.className = err ? 'err' : ''; m.style.display = text ? 'block' : 'none'; }
+
+async function readPdf(file) {
+  const doc = await pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+  const pages = [];
+  for (let p = 1; p <= doc.numPages; p++) {
+    const tc = await (await doc.getPage(p)).getTextContent();
+    pages.push({ items: tc.items.map(it => ({ str: it.str, x: it.transform[4], y: it.transform[5] })) });
+  }
+  return pages;
+}
+
+function parseCsv(text) {
+  text = text.replace(/^﻿/, '');
+  const first = text.split(/\r?\n/, 1)[0];
+  const sep = (first.match(/;/g) || []).length >= (first.match(/,/g) || []).length ? ';' : ',';
+  const rows = []; let row = [], f = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) { if (c === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += c; }
+    else if (c === '"') q = true;
+    else if (c === sep) { row.push(f); f = ''; }
+    else if (c === '\n') { row.push(f.replace(/\r$/, '')); rows.push(row); row = []; f = ''; }
+    else f += c;
+  }
+  if (f || row.length) { row.push(f); rows.push(row); }
+  return rows;
+}
+
+async function readPlanFiles(files) {
+  let pianRows = null, strRows = null;
+  for (const file of files) {
+    if (/\.csv$/i.test(file.name)) {
+      const rows = parseCsv(await file.text());
+      if (findHeader(rows, ['data', 'dalle'])) pianRows = rows;
+      else if (findHeader(rows, ['anno', 'sezione', 'codici'])) strRows = rows;
+    } else {
+      const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+      const sheets = wb.SheetNames.map(n => XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: '' }));
+      pianRows = sheets.find(r => findHeader(r, ['data', 'dalle'])) ?? sheets[0];
+      strRows = sheets.find(r => findHeader(r, ['anno', 'sezione', 'codici'])) ?? sheets[1];
+    }
+  }
+  if (!pianRows) throw new Error('Manca il foglio della pianificazione (quello con le colonne data / dalle / classi).');
+  if (!strRows) throw new Error('Manca il foglio della struttura (quello con anno / sezione / Codici / Docente).');
+  return { plan: parsePianificazione(pianRows), strutt: parseStruttura(strRows) };
+}
+
+function setupDrop(zoneId, inputId, handler) {
+  const zone = $(zoneId), input = $(inputId);
+  input.addEventListener('change', () => input.files.length && handler([...input.files]));
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('over'));
+  zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('over'); if (e.dataTransfer.files.length) handler([...e.dataTransfer.files]); });
+}
+
+setupDrop('dropPdf', 'inPdf', async files => {
+  const f = files.find(x => /\.pdf$/i.test(x.name)) ?? files[0];
+  try { showMsg('Lettura del PDF…'); state.pdfPages = await readPdf(f); state.pdfName = f.name; $('namePdf').textContent = f.name; showMsg(''); render(); }
+  catch (e) { showMsg('Non riesco a leggere il PDF: ' + e.message, true); }
+});
+setupDrop('dropPlan', 'inPlan', async files => {
+  try {
+    const r = await readPlanFiles(files);
+    Object.assign(state, r, { planName: files.map(f => f.name).join(' + ') });
+    $('namePlan').textContent = state.planName; showMsg(''); render();
+  } catch (e) { showMsg(e.message, true); }
+});
+
+document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('active', x === b));
+  ['confronto', 'sostegni', 'alias'].forEach(t => $('tab-' + t).classList.toggle('hidden', t !== b.dataset.tab));
+}));
+$('onlyIssues').addEventListener('change', render);
+
+function fmtOre(ora, ore) { return ore > 1 ? `${ROMAN[ora]}–${ROMAN[ora + ore - 1]}` : ROMAN[ora]; }
+function fmtDate(iso) { const [y, m, d] = iso.split('-'); return `${+d} ${MESI[m - 1]} ${y}`; }
+
+function render() {
+  if (!state.pdfPages) return;
+  const registro = parseRegistro(state.pdfPages);
+  if (!registro.registers.length) { showMsg('Nel PDF non trovo registri di classe: è l\'estrazione corretta di ClasseViva?', true); return; }
+  $('results').classList.remove('hidden');
+  const dataTxt = registro.date ? fmtDate(registro.date) : 'data non riconosciuta';
+  $('dayLabel').textContent = `Registro del ${dataTxt} · ${registro.registers.length} classi`;
+  renderSostegni(registro, dataTxt);
+  if (!state.plan) { $('confronto').innerHTML = '<p class="empty">Carica anche la pianificazione per vedere il confronto.</p>'; $('summary').innerHTML = ''; renderAliases(); return; }
+  if (!state.plan.days[registro.date]) {
+    showMsg(`La pianificazione non contiene il giorno ${dataTxt}.`, true);
+  }
+  const aliases = loadAliases();
+  const res = confronta(registro, state.plan, state.strutt, registro.date, aliases);
+  renderConfronto(res, dataTxt);
+  renderAliases();
+}
+
+function riga(r) {
+  const p = r.p, s = r.s;
+  const pian = p ? `<div>${esc(p.disciplina || '—')} · <b>${esc(p.docente || '—')}</b></div><div class="code">${esc(p.code)}${p.altraClasse ? ' (preso da altra classe)' : ''}</div>` : '<span class="sm">nulla in pianificazione</span>';
+  const firm = s ? `<div>${esc(s.materia)} · <b>${esc(s.docente)}</b></div><div class="sm">${esc(s.tipo)}${s.ore > 1 ? ` · ${fmtOre(s.ora, s.ore)}` : ''}</div>` : '<span class="sm">nessuna firma</span>';
+  let azioni = '';
+  if (p && s && r.esiti.includes('materia')) azioni += ` <button class="btn ghost mini no-print" data-alias="m|${esc(norm(s.materia))}|${esc(norm(p.disciplina))}" title="Considera «${esc(s.materia)}» uguale a «${esc(p.disciplina)}»">= materia</button>`;
+  if (p && s && r.esiti.includes('docente') && p.docente) azioni += ` <button class="btn ghost mini no-print" data-alias="d|${esc(norm(s.docente))}|${esc(norm(p.docente))}" title="Considera «${esc(s.docente)}» uguale a «${esc(p.docente)}»">= docente</button>`;
+  const badges = r.esiti.map(e => `<span class="badge ${ESITI[e][1]}">${ESITI[e][0]}</span>`).join('');
+  return `<tr class="${r.esiti.length === 1 && r.esiti[0] === 'ok' ? 'row-ok' : ''}"><td class="ora">${ROMAN[r.ora]}</td><td>${pian}</td><td>${firm}</td><td>${badges}${azioni}</td></tr>`;
+}
+
+function renderConfronto(res, dataTxt) {
+  const only = $('onlyIssues').checked;
+  const isIssue = r => !(r.esiti.length === 1 && r.esiti[0] === 'ok');
+  const conteggi = {};
+  for (const c of res.classi) for (const r of c.righe) for (const e of r.esiti) conteggi[e] = (conteggi[e] ?? 0) + 1;
+  const classiOk = res.classi.filter(c => !c.righe.some(isIssue));
+  $('summary').innerHTML = [
+    `<span class="chip"><b>${res.classi.length}</b> classi confrontate</span>`,
+    ...Object.keys(ESITI).filter(k => conteggi[k]).map(k => `<span class="chip"><span class="badge ${ESITI[k][1]}">${ESITI[k][0]}</span> <b>${conteggi[k]}</b></span>`),
+  ].join('');
+  $('ptConfronto').textContent = `Confronto registro / pianificazione — ${dataTxt}`;
+  let html = '';
+  for (const c of res.classi) {
+    const righe = only ? c.righe.filter(isIssue) : c.righe;
+    if (!righe.length) continue;
+    const n = c.righe.filter(isIssue).length;
+    html += `<div class="card"><h3>${esc(c.classe)} <span class="count">${n ? `${n} anomali${n === 1 ? 'a' : 'e'}` : 'tutto ok'}</span></h3>
+      <div class="table-wrap"><table><colgroup><col class="c-ora"><col><col><col class="c-esito"></colgroup><thead><tr><th>Ora</th><th>Pianificato</th><th>Firmato sul registro</th><th>Esito</th></tr></thead>
+      <tbody>${righe.map(r => riga(r)).join('')}</tbody></table></div></div>`;
+  }
+  if (only && classiOk.length) html = `<p class="okline">Senza anomalie: ${classiOk.map(c => esc(c.classe)).join(', ')}</p>` + html;
+  if (res.ignorate.length) html += `<p class="okline">Non confrontate (assenti nella pianificazione): ${res.ignorate.map(esc).join(', ')}</p>`;
+  $('confronto').innerHTML = html || '<p class="empty">Nessuna ora da confrontare per questo giorno.</p>';
+  $('confronto').querySelectorAll('[data-alias]').forEach(b => b.addEventListener('click', () => {
+    const set = loadAliases(); set.add(b.dataset.alias); saveAliases(set); render();
+  }));
+}
+
+function renderSostegni(registro, dataTxt) {
+  const list = sostegni(registro);
+  $('ptSostegni').textContent = `Sostegni firmati — ${dataTxt}`;
+  if (!list.length) { $('sostegni').innerHTML = '<p class="empty">Nessuna ora di sostegno firmata oggi.</p>'; return; }
+  const perDocente = {};
+  for (const c of list) for (const r of c.righe) {
+    const d = perDocente[r.docente] ??= { ore: 0, classi: new Set() };
+    d.ore += r.ore; d.classi.add(c.classe);
+  }
+  let html = `<div class="card"><h3>Riepilogo per docente</h3><div class="table-wrap"><table>
+    <thead><tr><th>Docente di sostegno</th><th>Ore</th><th>Classi</th></tr></thead><tbody>
+    ${Object.entries(perDocente).sort((a, b) => a[0].localeCompare(b[0])).map(([d, v]) => `<tr><td><b>${esc(d)}</b></td><td>${v.ore}</td><td>${[...v.classi].map(esc).join(', ')}</td></tr>`).join('')}
+    </tbody></table></div></div>`;
+  for (const c of list) {
+    const tot = c.righe.reduce((s, r) => s + r.ore, 0);
+    html += `<div class="card"><h3>${esc(c.classe)} <span class="count">${tot} or${tot === 1 ? 'a' : 'e'} di sostegno</span></h3>
+      <div class="table-wrap"><table><colgroup><col class="c-ora"><col class="c-ore"><col style="width:20%"><col style="width:24%"><col><col class="c-check"></colgroup><thead><tr><th>Ora</th><th>Ore</th><th>Docente di sostegno</th><th>In compresenza con</th><th>Argomento</th><th class="check">Cartaceo</th></tr></thead><tbody>
+      ${c.righe.map(r => `<tr><td class="ora">${fmtOre(r.ora, r.ore)}</td><td>${r.ore}</td><td><b>${esc(r.docente)}</b><div class="sm">${esc(r.tipo)}</div></td>
+        <td>${r.conChi.map(x => `${esc(x.materia)} · ${esc(x.docente)}`).join('<br>') || '<span class="sm">—</span>'}</td>
+        <td>${esc(r.argomento)}</td><td class="check"><span class="box"></span></td></tr>`).join('')}
+      </tbody></table></div></div>`;
+  }
+  $('sostegni').innerHTML = html;
+}
+
+function renderAliases() {
+  const set = loadAliases();
+  if (!set.size) { $('aliasList').innerHTML = '<p class="empty">Nessuna equivalenza salvata.</p>'; return; }
+  $('aliasList').innerHTML = '<ul class="aliases">' + [...set].sort().map(a => {
+    const [t, f, p] = a.split('|');
+    return `<li><span class="badge b-info">${t === 'm' ? 'materia' : 'docente'}</span> <span class="code">${esc(f)}</span> = <span class="code">${esc(p)}</span> <button class="btn ghost mini" data-del="${esc(a)}">rimuovi</button></li>`;
+  }).join('') + '</ul>';
+  $('aliasList').querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => {
+    const s = loadAliases(); s.delete(b.dataset.del); saveAliases(s); render();
+  }));
+}
+</script>
+</body>
+</html>

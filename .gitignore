@@ -1,0 +1,8 @@
+# Dati reali: non vanno nel repository
+# (il registro contiene nomi e date di nascita degli studenti; la pianificazione docenti e costi)
+*.pdf
+*.xlsx
+*.xlsm
+*.xls
+*.csv
+~$*
