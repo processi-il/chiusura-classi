@@ -105,13 +105,19 @@ tr.row-ok td { color: var(--muted); }
       <div class="fname" id="namePlan"></div>
       <input type="file" id="inPlan" accept=".xlsx,.xlsm,.xls,.csv" multiple>
     </label>
+    <label class="drop" id="dropAule">
+      <b>3 · Piano aule (gestionale)</b>
+      <small>Il file PianoAule.xls del giorno, facoltativo</small>
+      <div class="fname" id="nameAule"></div>
+      <input type="file" id="inAule" accept=".xls,.xlsx,.xml">
+    </label>
   </div>
   <div id="msg"></div>
 
   <div id="results" class="hidden">
     <div class="summary" id="summary"></div>
     <div class="tabs">
-      <button data-tab="confronto" class="active">Confronto registro / pianificazione</button>
+      <button data-tab="confronto" class="active">Confronto</button>
       <button data-tab="sostegni">Sostegni</button>
       <button data-tab="alias">Equivalenze</button>
     </div>
@@ -295,22 +301,85 @@ function lookupCode(strutt, classe, code) {
 const PAROLINE = new Set(['DI', 'DEL', 'DELLA', 'DELLO', 'DELL', 'DEI', 'DEGLI', 'DELLE', 'E', 'ED', 'IL', 'LO', 'LA', 'PER', 'A', 'AL', 'IN', 'CON']);
 const normMateria = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase()
   .split(/[^A-Z0-9]+/).filter(w => w && !PAROLINE.has(w)).join('');
+// stessa materia scritta in modo diverso: troncata ("TEORIA DI CUCI"), con prefisso ("LAB.SALA" / "SALA"),
+// al singolare o al plurale ("ACCONCIATORE" / "ACCONCIATORI")
+function simili(a, b) {
+  if (!a || !b) return false;
+  if (a.startsWith(b) || b.startsWith(a)) return true;
+  const [s, l] = a.length <= b.length ? [a, b] : [b, a];
+  if (s.length >= 4 && l.includes(s)) return true;
+  let k = 0; while (k < s.length && s[k] === l[k]) k++;
+  return s.length >= 6 && k >= s.length - 1;
+}
 function materiaOk(firmata, p, aliases) {
   const f = norm(firmata), d = norm(p.disciplina);
   if (!d) return null; // disciplina sconosciuta
-  const f2 = normMateria(firmata), d2 = normMateria(p.disciplina);
-  return f.startsWith(d) || d.startsWith(f) || f2.startsWith(d2) || d2.startsWith(f2) || aliases.has(`m|${f}|${d}`);
+  return simili(f, d) || simili(normMateria(firmata), normMateria(p.disciplina)) || aliases.has(`m|${f}|${d}`);
 }
 function docenteOk(firmato, p, aliases) {
   const f = norm(firmato), d = norm(p.docente);
   if (!d) return p.suffisso ? f.startsWith(norm(p.suffisso)) : null;
   return f.startsWith(d) || aliases.has(`d|${f}|${d}`);
 }
-function confronta(registro, plan, strutt, date, aliases) {
+// nomi di persona: "ACOSTA SUAREZ" = "ACOSTA SUAREZ MAURICIO", "PISANO ELENA" = "PUNTI DI VISTA DI PISANO ELENA", "Acosta" = "ACOSTA SUAREZ MAURICIO"
+function nomeOk(a, b) {
+  const parole = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean);
+  const coda = (w, n) => n.length >= 3 && w.some((_, k) => w.slice(k).join('').startsWith(n));
+  return coda(parole(a), norm(b)) || coda(parole(b), norm(a));
+}
+
+// ---------- Piano aule (gestionale) ----------
+// rows: righe del foglio (indici di colonna assoluti); spans: { "riga,colonna": colonne unite } per le celle unite
+function parsePianoAule(rows, spans = {}) {
+  let date = null, base = null;
+  for (const r of rows.slice(0, 10)) {
+    for (const c of r) {
+      const m = String(c ?? '').match(/PIANO AULE DEL GIORNO:\s*(\d{1,2})\/(\d{1,2})\/(\d{4})/i);
+      if (m) date = isoDate(m[3], +m[2], +m[1]);
+    }
+    const j = r.findIndex(c => String(c ?? '').trim() === '08:00');
+    if (j >= 0 && base == null) base = j;
+  }
+  if (!date) throw new Error('Non è il piano aule: manca il titolo "PIANO AULE DEL GIORNO".');
+  base ??= 2;
+  // colonne da mezz'ora a partire dalle 08:00: ogni ora di lezione (08:30 = ora I) occupa due colonne;
+  // nel pomeriggio la riga MATERIA è spostata di una colonna, l'arrotondamento in basso la riporta all'ora giusta
+  const oraDi = j => Math.floor((j - base - 1) / 2) + 1;
+  const classi = {};
+  for (let i = 0; i < rows.length; i++) {
+    const m = String(rows[i][0] ?? '').trim().match(/^(\d[A-Z]{1,3})_/i);
+    if (!m) continue;
+    const classe = m[1].toUpperCase();
+    const riga = nome => rows.slice(i + 1, i + 4).find(r => String(r[1] ?? '').trim().toUpperCase() === nome);
+    const rDoc = riga('DOCENTE'), rMat = riga('MATERIA');
+    if (!rDoc) continue;
+    const iDoc = rows.indexOf(rDoc);
+    rDoc.forEach((v, j) => {
+      const testo = String(v ?? '').trim();
+      if (j < 2 || !testo) return;
+      const ore = Math.max(1, Math.round((spans[`${iDoc},${j}`] ?? 2) / 2));
+      const cella = {
+        aula: String(rows[i][j] ?? '').trim(),
+        materia: String(rMat?.[j] ?? '').trim() || String(rMat?.[j + 1] ?? '').trim(),
+        docenti: testo.split(/\s+-\s+/).map(s => s.trim()).filter(Boolean),
+      };
+      for (let k = 0; k < ore; k++) {
+        const ora = oraDi(j) + k;
+        if (ora >= 1 && ora <= 12) (classi[classe] ??= {})[ora] = cella;
+      }
+    });
+  }
+  return { date, classi };
+}
+
+// ---------- Confronto ----------
+// registro può mancare (solo pianificazione + piano aule); aule = classi del piano aule dello stesso giorno, o null
+function confronta(registro, plan, strutt, date, aliases, aule = null) {
   const day = plan.days[date] ?? {};
-  const regByClass = Object.fromEntries(registro.registers.map(r => [r.classe, r]));
-  const classi = plan.classi.filter(c => day[c] || regByClass[c]);
-  const ignorate = registro.registers.map(r => r.classe).filter(c => !plan.classi.includes(c));
+  const regs = registro?.registers ?? [];
+  const regByClass = Object.fromEntries(regs.map(r => [r.classe, r]));
+  const classi = plan.classi.filter(c => day[c] || regByClass[c] || aule?.[c]);
+  const ignorate = [...new Set([...regs.map(r => r.classe), ...Object.keys(aule ?? {})])].filter(c => !plan.classi.includes(c));
   const out = [];
   for (const classe of classi) {
     const reg = regByClass[classe];
@@ -321,8 +390,12 @@ function confronta(registro, plan, strutt, date, aliases) {
     }
     const pian = day[classe] ?? {};
     const ore = [...new Set([...Object.keys(pian), ...Object.keys(firmate)].map(Number))].sort((a, b) => a - b);
+    const celle = aule?.[classe] ?? {};
+    if (aule) ore.push(...Object.keys(celle).map(Number).filter(o => !ore.includes(o)));
+    ore.sort((a, b) => a - b);
     const righe = [];
     for (const ora of ore) {
+      const inizio = righe.length;
       const P = (pian[ora] ?? []).map(c => lookupCode(strutt, classe, c));
       const S = [...(firmate[ora] ?? [])];
       const usate = new Set();
@@ -346,11 +419,69 @@ function confronta(registro, plan, strutt, date, aliases) {
         if (s.tipo === 'Supplenza') esiti.push('supplenza');
         righe.push({ ora, p: best?.p ?? null, s, esiti });
       }
-      P.forEach((p, i) => { if (!usate.has(i)) righe.push({ ora, p, s: null, esiti: [reg ? 'mancante' : 'registro-assente'] }); });
+      P.forEach((p, i) => { if (!usate.has(i)) righe.push({ ora, p, s: null, esiti: registro ? [reg ? 'mancante' : 'registro-assente'] : [] }); });
+      if (aule) confrontaAule(righe, inizio, ora, celle[ora], aliases);
+      for (const r of righe.slice(inizio)) if (!r.esiti.length) r.esiti.push('ok');
     }
     out.push({ classe, presente: !!reg, righe });
   }
   return { date, classi: out, ignorate };
+}
+
+// abbina le righe di un'ora (pianificato / firmato) ai docenti della cella del piano aule
+function confrontaAule(righe, inizio, ora, cella, aliases) {
+  const usati = new Set();
+  const docOk = (a, rif) => rif && (nomeOk(a, rif) || aliases.has(`d|${norm(a)}|${norm(rif)}`));
+  const segna = (r, e) => { r.esiti = r.esiti.filter(x => x !== 'ok'); r.esiti.push(e); };
+  for (const r of righe.slice(inizio)) {
+    if (!cella) { segna(r, 'aule-mancante'); continue; }
+    const rifs = [r.p && (r.p.docente || r.p.suffisso), r.s?.docente].filter(Boolean);
+    let k = cella.docenti.findIndex((d, i) => !usati.has(i) && rifs.some(x => docOk(d, x)));
+    let docDiverso = false;
+    if (k < 0 && r.p && !usati.has(0)) { k = 0; docDiverso = true; }
+    if (k < 0) { segna(r, 'aule-mancante'); continue; }
+    usati.add(k);
+    r.a = { aula: cella.aula, materia: cella.materia, docente: cella.docenti[k] };
+    if (docDiverso) segna(r, 'aule-docente');
+    const disc = r.p?.disciplina || r.s?.materia;
+    if (disc && cella.materia && materiaOk(cella.materia, { disciplina: disc }, aliases) === false) segna(r, 'aule-materia');
+  }
+  // cella che nessuna riga ha usato: lezione presente solo nel piano aule.
+  // I docenti in più di una cella usata (sostegno, compresenza) si controllano con i sostegni.
+  if (cella && !usati.size) {
+    righe.push({ ora, p: null, s: null, a: { aula: cella.aula, materia: cella.materia, docente: cella.docenti.join(' - ') }, esiti: ['solo-aule'] });
+  }
+}
+
+// docenti in più nel piano aule (sostegno o compresenza) che non risultano né pianificati né firmati in quell'ora
+function sostegniAule(registro, aule, plan, strutt, date) {
+  const regByClass = Object.fromEntries(registro.registers.map(r => [r.classe, r]));
+  const day = plan?.days[date] ?? {};
+  const out = [];
+  for (const [classe, celle] of Object.entries(aule)) {
+    const reg = regByClass[classe];
+    if (!reg) continue;
+    const righe = [];
+    for (const ora of Object.keys(celle).map(Number).sort((a, b) => a - b)) {
+      const cella = celle[ora];
+      const firme = reg.entries.filter(e => e.ora <= ora && ora < e.ora + e.ore);
+      const pian = (day[classe]?.[ora] ?? []).map(c => lookupCode(strutt, classe, c));
+      for (const d of cella.docenti.slice(1)) {
+        if (firme.some(e => nomeOk(d, e.docente)) || pian.some(p => p.docente && nomeOk(d, p.docente))) continue;
+        const prev = righe.find(x => x.docente === d && x.ora + x.ore === ora);
+        if (prev) prev.ore++;
+        else righe.push({ ora, ore: 1, docente: d, con: cella.docenti[0], materia: cella.materia });
+      }
+    }
+    if (righe.length) out.push({ classe, righe });
+  }
+  return out.sort((a, b) => a.classe.localeCompare(b.classe));
+}
+// un sostegno firmato è previsto nel piano aule se il docente è nella cella della classe per tutte le sue ore
+function sostegnoPrevisto(e, celle) {
+  let si = 0;
+  for (let o = e.ora; o < e.ora + e.ore; o++) if (celle?.[o]?.docenti.some(d => nomeOk(d, e.docente))) si++;
+  return si === e.ore ? 'si' : si ? 'parte' : 'no';
 }
 
 function sostegni(registro) {
@@ -380,9 +511,13 @@ const ESITI = {
   'compresenza': ['Compresenza non pianificata', 'b-info'],
   'supplenza': ['Supplenza', 'b-sub'],
   'codice-sconosciuto': ['Codice non presente in struttura', 'b-info'],
+  'aule-mancante': ['Non presente nel piano aule', 'b-err'],
+  'aule-docente': ['Docente diverso nel piano aule', 'b-warn'],
+  'aule-materia': ['Materia diversa nel piano aule', 'b-warn'],
+  'solo-aule': ['Solo nel piano aule', 'b-err'],
 };
 const ALIAS_KEY = 'chiusura-classi.alias';
-let state = { pdfPages: null, pdfName: '', plan: null, strutt: null, planName: '' };
+let state = { pdfPages: null, pdfName: '', plan: null, strutt: null, planName: '', aule: null };
 
 function loadAliases() { try { return new Set(JSON.parse(localStorage.getItem(ALIAS_KEY) || '[]')); } catch { return new Set(); } }
 function saveAliases(set) { try { localStorage.setItem(ALIAS_KEY, JSON.stringify([...set])); } catch {} }
@@ -455,6 +590,17 @@ setupDrop('dropPlan', 'inPlan', async files => {
     $('namePlan').textContent = state.planName; showMsg(''); render();
   } catch (e) { showMsg(e.message, true); }
 });
+setupDrop('dropAule', 'inAule', async files => {
+  try {
+    const f = files[0];
+    const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const s0 = XLSX.utils.decode_range(ws['!ref'] ?? 'A1').s, spans = {};
+    for (const m of ws['!merges'] ?? []) spans[`${m.s.r - s0.r},${m.s.c - s0.c}`] = m.e.c - m.s.c + 1;
+    state.aule = parsePianoAule(XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' }), spans);
+    $('nameAule').textContent = f.name; showMsg(''); render();
+  } catch (e) { showMsg('Piano aule: ' + e.message, true); }
+});
 
 document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => {
   document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('active', x === b));
@@ -466,35 +612,46 @@ function fmtOre(ora, ore) { return ore > 1 ? `${ROMAN[ora]}–${ROMAN[ora + ore 
 function fmtDate(iso) { const [y, m, d] = iso.split('-'); return `${+d} ${MESI[m - 1]} ${y}`; }
 
 function render() {
-  if (!state.pdfPages) return;
-  const registro = parseRegistro(state.pdfPages);
-  if (!registro.registers.length) { showMsg('Nel PDF non trovo registri di classe: è l\'estrazione corretta di ClasseViva?', true); return; }
+  const registro = state.pdfPages ? parseRegistro(state.pdfPages) : null;
+  if (registro && !registro.registers.length) { showMsg('Nel PDF non trovo registri di classe: è l\'estrazione corretta di ClasseViva?', true); return; }
+  if (!registro && !(state.plan && state.aule)) return;
   $('results').classList.remove('hidden');
-  const dataTxt = registro.date ? fmtDate(registro.date) : 'data non riconosciuta';
-  $('dayLabel').textContent = `Registro del ${dataTxt} · ${registro.registers.length} classi`;
-  renderSostegni(registro, dataTxt);
-  if (!state.plan) { $('confronto').innerHTML = '<p class="empty">Carica anche la pianificazione per vedere il confronto.</p>'; $('summary').innerHTML = ''; renderAliases(); return; }
-  if (!state.plan.days[registro.date]) {
-    showMsg(`La pianificazione non contiene il giorno ${dataTxt}.`, true);
-  }
+  const date = registro ? registro.date : state.aule.date;
+  const dataTxt = date ? fmtDate(date) : 'data non riconosciuta';
+  $('dayLabel').textContent = registro ? `Registro del ${dataTxt} · ${registro.registers.length} classi` : `Pianificazione e piano aule del ${dataTxt} · registro non caricato`;
+  const avvisi = [];
+  // il piano aule si confronta solo se è dello stesso giorno del registro
+  const aule = state.aule && state.aule.date === date ? state.aule.classi : null;
+  if (state.aule && !aule) avvisi.push(`Il piano aule è del ${fmtDate(state.aule.date)}, il registro del ${dataTxt}: piano aule non confrontato.`);
+  renderSostegni(registro, dataTxt, aule);
+  if (!state.plan) { $('confronto').innerHTML = '<p class="empty">Carica anche la pianificazione per vedere il confronto.</p>'; $('summary').innerHTML = ''; renderAliases(); showMsg(avvisi.join(' '), true); return; }
+  if (!state.plan.days[date]) avvisi.push(`La pianificazione non contiene il giorno ${dataTxt}.`);
+  showMsg(avvisi.join(' '), true);
   const aliases = loadAliases();
-  const res = confronta(registro, state.plan, state.strutt, registro.date, aliases);
-  renderConfronto(res, dataTxt);
+  const res = confronta(registro, state.plan, state.strutt, date, aliases, aule);
+  renderConfronto(res, dataTxt, { registro: !!registro, aule: !!aule });
   renderAliases();
 }
 
-function riga(r) {
-  const p = r.p, s = r.s;
+function aliasBtn(tipo, da, a, etichetta) {
+  return ` <button class="btn ghost mini no-print" data-alias="${tipo}|${esc(norm(da))}|${esc(norm(a))}" title="Considera «${esc(da)}» uguale a «${esc(a)}»">${etichetta}</button>`;
+}
+function riga(r, col) {
+  const p = r.p, s = r.s, a = r.a;
   const pian = p ? `<div>${esc(p.disciplina || '—')} · <b>${esc(p.docente || '—')}</b></div><div class="code">${esc(p.code)}${p.altraClasse ? ' (preso da altra classe)' : ''}</div>` : '<span class="sm">nulla in pianificazione</span>';
   const firm = s ? `<div>${esc(s.materia)} · <b>${esc(s.docente)}</b></div><div class="sm">${esc(s.tipo)}${s.ore > 1 ? ` · ${fmtOre(s.ora, s.ore)}` : ''}</div>` : '<span class="sm">nessuna firma</span>';
+  const aul = a ? `<div>${esc(a.materia || '—')} · <b>${esc(a.docente)}</b></div><div class="sm">${esc(a.aula)}</div>` : '<span class="sm">nulla nel piano aule</span>';
   let azioni = '';
-  if (p && s && r.esiti.includes('materia')) azioni += ` <button class="btn ghost mini no-print" data-alias="m|${esc(norm(s.materia))}|${esc(norm(p.disciplina))}" title="Considera «${esc(s.materia)}» uguale a «${esc(p.disciplina)}»">= materia</button>`;
-  if (p && s && r.esiti.includes('docente') && p.docente) azioni += ` <button class="btn ghost mini no-print" data-alias="d|${esc(norm(s.docente))}|${esc(norm(p.docente))}" title="Considera «${esc(s.docente)}» uguale a «${esc(p.docente)}»">= docente</button>`;
+  if (p && s && r.esiti.includes('materia')) azioni += aliasBtn('m', s.materia, p.disciplina, '= materia');
+  if (p && s && r.esiti.includes('docente') && p.docente) azioni += aliasBtn('d', s.docente, p.docente, '= docente');
+  const rif = p || s ? { materia: p?.disciplina || s?.materia, docente: p ? p.docente : s.docente } : null;
+  if (a && rif && r.esiti.includes('aule-materia')) azioni += aliasBtn('m', a.materia, rif.materia, '= materia aule');
+  if (a && rif?.docente && r.esiti.includes('aule-docente')) azioni += aliasBtn('d', a.docente, rif.docente, '= docente aule');
   const badges = r.esiti.map(e => `<span class="badge ${ESITI[e][1]}">${ESITI[e][0]}</span>`).join('');
-  return `<tr class="${r.esiti.length === 1 && r.esiti[0] === 'ok' ? 'row-ok' : ''}"><td class="ora">${ROMAN[r.ora]}</td><td>${pian}</td><td>${firm}</td><td>${badges}${azioni}</td></tr>`;
+  return `<tr class="${r.esiti.length === 1 && r.esiti[0] === 'ok' ? 'row-ok' : ''}"><td class="ora">${ROMAN[r.ora]}</td><td>${pian}</td>${col.aule ? `<td>${aul}</td>` : ''}${col.registro ? `<td>${firm}</td>` : ''}<td>${badges}${azioni}</td></tr>`;
 }
 
-function renderConfronto(res, dataTxt) {
+function renderConfronto(res, dataTxt, col) {
   const only = $('onlyIssues').checked;
   const isIssue = r => !(r.esiti.length === 1 && r.esiti[0] === 'ok');
   const conteggi = {};
@@ -504,15 +661,16 @@ function renderConfronto(res, dataTxt) {
     `<span class="chip"><b>${res.classi.length}</b> classi confrontate</span>`,
     ...Object.keys(ESITI).filter(k => conteggi[k]).map(k => `<span class="chip"><span class="badge ${ESITI[k][1]}">${ESITI[k][0]}</span> <b>${conteggi[k]}</b></span>`),
   ].join('');
-  $('ptConfronto').textContent = `Confronto registro / pianificazione — ${dataTxt}`;
+  $('ptConfronto').textContent = `Confronto ${[col.registro && 'registro', 'pianificazione', col.aule && 'piano aule'].filter(Boolean).join(' / ')} — ${dataTxt}`;
   let html = '';
   for (const c of res.classi) {
     const righe = only ? c.righe.filter(isIssue) : c.righe;
     if (!righe.length) continue;
     const n = c.righe.filter(isIssue).length;
     html += `<div class="card"><h3>${esc(c.classe)} <span class="count">${n ? `${n} anomali${n === 1 ? 'a' : 'e'}` : 'tutto ok'}</span></h3>
-      <div class="table-wrap"><table><colgroup><col class="c-ora"><col><col><col class="c-esito"></colgroup><thead><tr><th>Ora</th><th>Pianificato</th><th>Firmato sul registro</th><th>Esito</th></tr></thead>
-      <tbody>${righe.map(r => riga(r)).join('')}</tbody></table></div></div>`;
+      <div class="table-wrap"><table><colgroup><col class="c-ora"><col>${col.aule ? '<col>' : ''}${col.registro ? '<col>' : ''}<col class="c-esito"></colgroup>
+      <thead><tr><th>Ora</th><th>Pianificato</th>${col.aule ? '<th>Piano aule</th>' : ''}${col.registro ? '<th>Firmato sul registro</th>' : ''}<th>Esito</th></tr></thead>
+      <tbody>${righe.map(r => riga(r, col)).join('')}</tbody></table></div></div>`;
   }
   if (only && classiOk.length) html = `<p class="okline">Senza anomalie: ${classiOk.map(c => esc(c.classe)).join(', ')}</p>` + html;
   if (res.ignorate.length) html += `<p class="okline">Non confrontate (assenti nella pianificazione): ${res.ignorate.map(esc).join(', ')}</p>`;
@@ -522,16 +680,28 @@ function renderConfronto(res, dataTxt) {
   }));
 }
 
-function renderSostegni(registro, dataTxt) {
-  const list = sostegni(registro);
+const PREVISTO = { si: ['previsto nel piano aule', 'b-ok'], parte: ['previsto solo in parte nel piano aule', 'b-warn'], no: ['non previsto nel piano aule', 'b-err'] };
+function renderSostegni(registro, dataTxt, aule) {
   $('ptSostegni').textContent = `Sostegni firmati — ${dataTxt}`;
-  if (!list.length) { $('sostegni').innerHTML = '<p class="empty">Nessuna ora di sostegno firmata oggi.</p>'; return; }
+  if (!registro) { $('sostegni').innerHTML = '<p class="empty">Carica il registro per vedere i sostegni firmati.</p>'; return; }
+  const list = sostegni(registro);
+  let html = '';
+  if (aule) {
+    const mancanti = sostegniAule(registro, aule, state.plan, state.strutt, registro.date);
+    if (mancanti.length) html += `<div class="card"><h3>Previsti nel piano aule ma non firmati</h3><div class="table-wrap"><table>
+      <colgroup><col class="c-ora"><col style="width:12%"><col><col></colgroup>
+      <thead><tr><th>Ora</th><th>Classe</th><th>Docente previsto</th><th>Con</th></tr></thead><tbody>
+      ${mancanti.flatMap(c => c.righe.map(r => `<tr><td class="ora">${fmtOre(r.ora, r.ore)}</td><td><b>${esc(c.classe)}</b></td><td><b>${esc(r.docente)}</b></td><td>${esc(r.materia)} · ${esc(r.con)}</td></tr>`)).join('')}
+      </tbody></table></div></div>`;
+    else html += '<p class="okline">Tutti i sostegni previsti nel piano aule risultano firmati.</p>';
+  }
+  if (!list.length) { $('sostegni').innerHTML = html + '<p class="empty">Nessuna ora di sostegno firmata oggi.</p>'; return; }
   const perDocente = {};
   for (const c of list) for (const r of c.righe) {
     const d = perDocente[r.docente] ??= { ore: 0, classi: new Set() };
     d.ore += r.ore; d.classi.add(c.classe);
   }
-  let html = `<div class="card"><h3>Riepilogo per docente</h3><div class="table-wrap"><table>
+  html += `<div class="card"><h3>Riepilogo per docente</h3><div class="table-wrap"><table>
     <thead><tr><th>Docente di sostegno</th><th>Ore</th><th>Classi</th></tr></thead><tbody>
     ${Object.entries(perDocente).sort((a, b) => a[0].localeCompare(b[0])).map(([d, v]) => `<tr><td><b>${esc(d)}</b></td><td>${v.ore}</td><td>${[...v.classi].map(esc).join(', ')}</td></tr>`).join('')}
     </tbody></table></div></div>`;
@@ -539,7 +709,7 @@ function renderSostegni(registro, dataTxt) {
     const tot = c.righe.reduce((s, r) => s + r.ore, 0);
     html += `<div class="card"><h3>${esc(c.classe)} <span class="count">${tot} or${tot === 1 ? 'a' : 'e'} di sostegno</span></h3>
       <div class="table-wrap"><table><colgroup><col class="c-ora"><col class="c-ore"><col style="width:20%"><col style="width:24%"><col><col class="c-check"></colgroup><thead><tr><th>Ora</th><th>Ore</th><th>Docente di sostegno</th><th>In compresenza con</th><th>Argomento</th><th class="check">Cartaceo</th></tr></thead><tbody>
-      ${c.righe.map(r => `<tr><td class="ora">${fmtOre(r.ora, r.ore)}</td><td>${r.ore}</td><td><b>${esc(r.docente)}</b><div class="sm">${esc(r.tipo)}</div></td>
+      ${c.righe.map(r => `<tr><td class="ora">${fmtOre(r.ora, r.ore)}</td><td>${r.ore}</td><td><b>${esc(r.docente)}</b><div class="sm">${esc(r.tipo)}</div>${aule ? (([t, cl]) => `<span class="badge ${cl}">${t}</span>`)(PREVISTO[sostegnoPrevisto(r, aule[c.classe])]) : ''}</td>
         <td>${r.conChi.map(x => `${esc(x.materia)} · ${esc(x.docente)}`).join('<br>') || '<span class="sm">—</span>'}</td>
         <td>${esc(r.argomento)}</td><td class="check"><span class="box"></span></td></tr>`).join('')}
       </tbody></table></div></div>`;
