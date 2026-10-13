@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Assenze e ritardi</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
+<style>
+:root {
+  --bg: #f6f5f1; --surface: #ffffff; --ink: #1d1d1b; --muted: #6b6a63; --line: #e3e1d9;
+  --accent: #2f5d50; --accent-soft: #e4eee9;
+  --ok: #2e7d4f; --ok-bg: #e6f3eb;
+  --warn: #a35b00; --warn-bg: #fdf0dc;
+  --err: #b3261e; --err-bg: #fbe7e5;
+  --info: #3d5a80; --info-bg: #e7edf5;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+header { padding: 20px 24px 8px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; }
+h1 { font-size: 22px; margin: 0; }
+#dayLabel { color: var(--muted); font-size: 15px; }
+main { padding: 0 24px 40px; max-width: 1100px; }
+.drop { display: block; border: 2px dashed var(--line); border-radius: 10px; background: var(--surface); padding: 14px 16px; cursor: pointer; margin: 12px 0 16px; max-width: 520px; }
+.drop:hover, .drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.drop b { display: block; font-size: 15px; }
+.drop small { color: var(--muted); }
+.drop .fname { margin-top: 6px; font-size: 13px; color: var(--accent); font-weight: 600; }
+.drop input { display: none; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin-bottom: 12px; }
+.btn { border: 1px solid var(--accent); background: var(--surface); color: var(--accent); border-radius: 6px; padding: 5px 12px; font: inherit; font-weight: 600; cursor: pointer; }
+.btn.mini { padding: 1px 8px; font-size: 12px; }
+select { font: inherit; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--line); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 12px; overflow: hidden; }
+.card h3 { margin: 0; padding: 10px 14px; font-size: 17px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; border-bottom: 1px solid var(--line); background: #fbfaf7; }
+.card h3 .sp { flex: 1; }
+.body { padding: 10px 14px 12px; }
+.body h4 { margin: 10px 0 4px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.body h4:first-child { margin-top: 0; }
+ul.list { margin: 0; padding: 0; list-style: none; }
+ul.list li { padding: 6px 0; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) 170px; gap: 2px 14px; align-items: center; }
+.stato { text-align: right; }
+.stato .badge { min-width: 150px; text-align: center; }
+.stato .nota { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; }
+ul.list li:last-child { border-bottom: 0; }
+.name { font-weight: 600; }
+.det { color: var(--muted); font-size: 13px; }
+.badge { display: inline-block; border-radius: 4px; padding: 1px 7px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.b-ok { background: var(--ok-bg); color: var(--ok); }
+.b-warn { background: var(--warn-bg); color: var(--warn); }
+.b-err { background: var(--err-bg); color: var(--err); }
+.b-info { background: var(--info-bg); color: var(--info); }
+.nums { display: flex; gap: 6px; flex-wrap: wrap; font-size: 13px; font-weight: 500; }
+.tutti { color: var(--muted); font-size: 13px; }
+.riepilogo { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 16px; overflow: hidden; }
+.riepilogo summary { padding: 9px 14px; font-weight: 600; cursor: pointer; color: var(--accent); }
+.riepilogo[open] summary { border-bottom: 1px solid var(--line); }
+.overview { width: 100%; border-collapse: collapse; }
+.overview th, .overview td { padding: 6px 10px; border-bottom: 1px solid var(--line); text-align: left; }
+.overview th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.overview td.n { font-variant-numeric: tabular-nums; }
+.overview a { color: var(--accent); font-weight: 700; text-decoration: none; }
+.legend { font-size: 13px; color: var(--muted); margin: 0 0 14px; }
+.hidden { display: none !important; }
+@media (max-width: 640px) {
+  header, main { padding-left: 16px; padding-right: 16px; }
+  ul.list li { grid-template-columns: minmax(0, 1fr) auto; }
+  ul.list li .det { grid-column: 1; grid-row: 2; }
+  ul.list li .stato { grid-column: 2; grid-row: 1 / span 2; }
+  .stato .badge { min-width: 0; }
+}
+@media print {
+  body { background: #fff; font-size: 12px; }
+  header, .drop, .toolbar, .riepilogo, .legend, .no-print { display: none !important; }
+  main { padding: 0; max-width: none; }
+  .card { border: 0; border-radius: 0; margin: 0; page-break-after: always; }
+  .card h3 { background: none; border-bottom: 2px solid #000; font-size: 18px; padding: 0 0 6px; }
+  .card h3::after { content: attr(data-date); font-size: 13px; font-weight: 400; margin-left: auto; }
+  .body { padding: 8px 0; }
+  .badge { border: 1px solid currentColor; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Assenze e ritardi</h1>
+  <span id="dayLabel">Report per i responsabili di classe — prova</span>
+</header>
+<main>
+  <label class="drop" id="drop">
+    <b>Registro ClasseViva (PDF)</b>
+    <small>Trascina qui il PDF della giornata o clicca per sceglierlo</small>
+    <div class="fname" id="fname"></div>
+    <input type="file" id="inPdf" accept=".pdf">
+  </label>
+  <div id="out"></div>
+</main>
+
+<script>
+/*CORE-START*/
+const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
+const MESI = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
+const norm = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z]/g, '');
+const pad = n => String(n).padStart(2, '0');
+
+// pages: [{ items: [{ str, x, y }] }] (coordinate pdf.js: y cresce verso l'alto)
+function parseAppello(pages) {
+  const classi = [];
+  let date = null;
+  for (const page of pages) {
+    const items = page.items.filter(it => it.str.trim());
+    const header = items.find(it => /Registro di classe/.test(it.str));
+    if (!header) continue;
+    const m = header.str.match(/Registro di classe\s+(.+?)-[A-Z]{4}\d+\S*\s+per il\s+(\d{1,2})\s+(\w+)\s+(\d{4})/i);
+    const classe = (m ? m[1] : '?').replace(/\s+APP$/i, '').replace(/_.*$/, '').trim().toUpperCase();
+    if (m && !date) { const mm = MESI.indexOf(m[3].toLowerCase()) + 1; if (mm) date = `${m[4]}-${pad(mm)}-${pad(m[2])}`; }
+
+    const giorno = items.find(it => it.str.trim() === 'Giorno');
+    const yTop = giorno ? giorno.y : Infinity;
+    const xGiorno = giorno ? giorno.x : 157;
+    const stops = items.filter(it => /^(Ora|Giustificazioni|Note)$/.test(it.str.trim()) && it.y < yTop).map(it => it.y);
+    const yBottom = stops.length ? Math.max(...stops) : -Infinity;
+    // colonne delle ore dalla riga di intestazione
+    const oreX = items.filter(it => Math.abs(it.y - yTop) < 3 && ROMAN.indexOf(it.str.trim()) > 0)
+      .map(it => ({ ora: ROMAN.indexOf(it.str.trim()), x: it.x + it.w / 2 }));
+    const xFirstHour = oreX.length ? Math.min(...oreX.map(o => o.x)) - 12 : 185;
+
+    // studenti: righe di nome nella colonna di sinistra, una riga numerata apre un nuovo studente
+    const grid = items.filter(it => it.y < yTop - 3 && it.y > yBottom);
+    const students = [];
+    for (const it of grid.filter(it => it.x < xGiorno - 5).sort((a, b) => b.y - a.y)) {
+      const s = it.str.trim();
+      const n = s.match(/^(\d+)\s+(.*)$/);
+      if (n) students.push({ n: +n[1], y: it.y, parts: [n[2]], codice: '', ore: {} });
+      else if (students.length) students[students.length - 1].parts.push(s);
+    }
+    const owner = it => {
+      let best = null;
+      for (const st of students) if (st.y + 4 >= it.y && (!best || st.y < best.y)) best = st;
+      return best;
+    };
+    for (const it of grid.filter(it => it.x >= xGiorno - 5)) {
+      const st = owner(it); if (!st) continue;
+      const s = it.str.trim();
+      if (it.x < xFirstHour) st.codice += s;
+      else if (oreX.length) {
+        const cx = it.x + it.w / 2;
+        const o = oreX.reduce((a, b) => Math.abs(b.x - cx) < Math.abs(a.x - cx) ? b : a);
+        st.ore[o.ora] = s;
+      }
+    }
+    for (const st of students) st.nome = st.parts.join(' ').replace(/\s+\d{2}\.\d{2}$/, '').replace(/\s+/g, ' ').trim();
+
+    // giustificazioni
+    const giust = [];
+    for (const it of items) {
+      const g = it.str.trim().match(/^(.+?)\s+giustifica\s+(?:il\s+|l')?(assenza|ritardo|uscita)\b(?:.*?(\d{2})\/(\d{2})\/(\d{4}))?/i);
+      if (g) giust.push({ nome: g[1].trim(), tipo: g[2].toLowerCase(), data: g[3] ? `${g[5]}-${g[4]}-${g[3]}` : null });
+    }
+    classi.push({ classe, studenti: students, giust });
+  }
+  return { date, classi };
+}
+
+const TIPO_CODICE = { A: 'assenza', R: 'ritardo', U: 'uscita' };
+
+function reportClasse(c, date) {
+  const eventi = [];
+  // prima ora di lezione della classe: chi è segnato R ma è presente già da quell'ora ha fatto un ritardo breve
+  const primaOra = Math.min(...c.studenti.flatMap(st => Object.keys(st.ore).map(Number)));
+  const usate = new Set();
+  for (const st of c.studenti) {
+    const cod = st.codice.toUpperCase();
+    if (!cod || cod === 'P' || cod === 'X') continue;
+    const oreNum = Object.keys(st.ore).map(Number).sort((a, b) => a - b);
+    const presenti = oreNum.filter(o => /^P/.test(st.ore[o]));
+    const assentiOre = oreNum.filter(o => /^A/.test(st.ore[o]));
+    let tipi, dettaglio = '', breve = false;
+    if (cod === 'A') { tipi = ['assenza']; dettaglio = 'assente tutto il giorno'; }
+    else if (cod === 'R') {
+      tipi = ['ritardo'];
+      breve = presenti.length > 0 && presenti[0] === primaOra;
+      dettaglio = breve ? `ritardo breve, presente dalla ${ROMAN[primaOra]} ora come la classe` : presenti.length ? `presente dalla ${ROMAN[presenti[0]]} ora` : '';
+    }
+    else if (cod === 'U') { tipi = ['uscita']; dettaglio = presenti.length ? `presente fino alla ${ROMAN[presenti[presenti.length - 1]]} ora` : ''; }
+    else { tipi = ['ritardo', 'uscita']; dettaglio = assentiOre.length ? `assente nelle ore ${assentiOre.map(o => ROMAN[o]).join(', ')}` : 'ingressi/uscite multipli'; }
+    const key = norm(st.nome);
+    const g = c.giust.map((x, i) => ({ ...x, i })).filter(x => !usate.has(x.i) && norm(x.nome) === key && tipi.includes(x.tipo) && (x.data === date || !x.data));
+    g.forEach(x => usate.add(x.i));
+    eventi.push({
+      nome: st.nome, codice: cod, tipo: cod === 'A' ? 'assenza' : cod === 'R' ? 'ritardo' : cod === 'U' ? 'uscita' : 'ritardo/uscita',
+      dettaglio, breve, giustificato: g.length > 0, daGiustificare: !g.length && !breve, senzaData: g.length > 0 && g.every(x => !x.data),
+    });
+  }
+  const altre = c.giust.filter((x, i) => !usate.has(i));
+  return {
+    classe: c.classe,
+    totStudenti: c.studenti.length,
+    assenze: eventi.filter(e => e.tipo === 'assenza'),
+    ritardi: eventi.filter(e => e.tipo !== 'assenza'),
+    precedenti: altre.filter(x => x.data && x.data !== date),
+    senzaData: altre.filter(x => !x.data),
+    oggiAltro: altre.filter(x => x.data === date),
+    codiciX: c.studenti.filter(s => s.codice.toUpperCase() === 'X').length,
+  };
+}
+/*CORE-END*/
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const fmtDate = iso => { const [y, m, d] = iso.split('-'); return `${+d}/${+m}/${y}`; };
+const fmtLong = iso => { const [y, m, d] = iso.split('-'); return `${+d} ${MESI[m - 1]} ${y}`; };
+const TIPO_LABEL = { assenza: 'assenza', ritardo: 'ritardo', uscita: 'uscita anticipata' };
+
+async function readPdf(file) {
+  const doc = await pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+  const pages = [];
+  for (let p = 1; p <= doc.numPages; p++) {
+    const tc = await (await doc.getPage(p)).getTextContent();
+    pages.push({ items: tc.items.map(it => ({ str: it.str, x: it.transform[4], y: it.transform[5], w: it.width })) });
+  }
+  return pages;
+}
+
+function stato(e) {
+  if (e.daGiustificare) return '<span class="stato"><span class="badge b-err">Da giustificare</span></span>';
+  if (!e.giustificato) return '<span class="stato"><span class="badge b-info">Non serve giustifica</span></span>';
+  return `<span class="stato"><span class="badge b-ok">Giustificato</span>${e.senzaData ? '<span class="nota">data non leggibile nel PDF</span>' : ''}</span>`;
+}
+
+function testoClasse(r, date) {
+  const L = [`Classe ${r.classe} — ${fmtLong(date)}`];
+  L.push('', `Assenti (${r.assenze.length}):`);
+  r.assenze.forEach(e => L.push(`- ${e.nome}: ${e.daGiustificare ? 'DA GIUSTIFICARE' : 'giustificato'}`));
+  if (!r.assenze.length) L.push('- nessuno');
+  L.push('', `Ritardi e uscite (${r.ritardi.length}):`);
+  r.ritardi.forEach(e => L.push(`- ${e.nome}: ${e.tipo}${e.dettaglio ? ` (${e.dettaglio})` : ''}, ${e.daGiustificare ? 'DA GIUSTIFICARE' : e.giustificato ? 'giustificato' : 'non serve giustifica'}`));
+  if (!r.ritardi.length) L.push('- nessuno');
+  if (r.precedenti.length) {
+    L.push('', 'Giustificazioni consegnate oggi per giorni precedenti:');
+    r.precedenti.forEach(g => L.push(`- ${g.nome}: ${TIPO_LABEL[g.tipo]} del ${fmtDate(g.data)}`));
+  }
+  if (r.senzaData.length) {
+    L.push('', 'Giustificazioni senza data leggibile:');
+    r.senzaData.forEach(g => L.push(`- ${g.nome}: ${TIPO_LABEL[g.tipo]}`));
+  }
+  return L.join('\n');
+}
+
+function render(data) {
+  const reports = data.classi.map(c => reportClasse(c, data.date));
+  $('dayLabel').textContent = `${fmtLong(data.date)} · ${reports.length} classi`;
+  const tot = k => reports.reduce((s, r) => s + r[k].length, 0);
+  const daG = reports.reduce((s, r) => s + [...r.assenze, ...r.ritardi].filter(e => e.daGiustificare).length, 0);
+  let html = `<div class="toolbar">
+      <span><b>${tot('assenze')}</b> assenti · <b>${tot('ritardi')}</b> ritardi/uscite · <b>${daG}</b> da giustificare</span>
+      <button class="btn" onclick="window.print()">Stampa (una pagina per classe)</button>
+    </div>
+    <p class="legend">"Giustificato" = sul registro c'è la giustificazione di oggi. Il PDF di un solo giorno non mostra le assenze ancora aperte dei giorni passati: in fondo a ogni classe trovi le giustificazioni consegnate oggi per giorni precedenti.</p>
+    <details class="riepilogo"><summary>Riepilogo per classe</summary>
+    <table class="overview"><thead><tr><th>Classe</th><th>Assenti</th><th>Ritardi / uscite</th><th>Da giustificare</th><th>Giust. giorni prec.</th></tr></thead><tbody>
+    ${reports.map(r => {
+      const dg = [...r.assenze, ...r.ritardi].filter(e => e.daGiustificare).length;
+      return `<tr><td><a href="#cl-${esc(r.classe)}">${esc(r.classe)}</a></td><td class="n">${r.assenze.length}</td><td class="n">${r.ritardi.length}</td>
+        <td class="n">${dg ? `<span class="badge b-err">${dg}</span>` : '0'}</td><td class="n">${r.precedenti.length}</td></tr>`;
+    }).join('')}</tbody></table></details>`;
+
+  for (const r of reports) {
+    const li = e => `<li><span class="name">${esc(e.nome)}</span><span class="det">${e.tipo !== 'assenza' ? esc(e.tipo) + (e.dettaglio ? ' · ' + esc(e.dettaglio) : '') : ''}</span>${stato(e)}</li>`;
+    html += `<div class="card" id="cl-${esc(r.classe)}"><h3 data-date="${fmtLong(data.date)}">Classe ${esc(r.classe)}
+        <span class="nums"><span class="badge b-info">${r.assenze.length} assenti</span><span class="badge b-warn">${r.ritardi.length} ritardi/uscite</span></span>
+        <span class="sp"></span><button class="btn mini no-print" data-copy="${esc(r.classe)}">Copia testo</button></h3>
+      <div class="body">
+        <h4>Assenti</h4>${r.assenze.length ? `<ul class="list">${r.assenze.map(li).join('')}</ul>` : '<div class="tutti">Nessun assente</div>'}
+        <h4>Ritardi e uscite anticipate</h4>${r.ritardi.length ? `<ul class="list">${r.ritardi.map(li).join('')}</ul>` : '<div class="tutti">Nessuno</div>'}
+        ${r.precedenti.length ? `<h4>Giustificazioni consegnate oggi per giorni precedenti</h4><ul class="list">${r.precedenti.map(g => `<li><span class="name">${esc(g.nome)}</span><span class="det">${TIPO_LABEL[g.tipo]} del ${fmtDate(g.data)}</span><span class="stato"><span class="badge b-ok">Giustificata</span></span></li>`).join('')}</ul>` : ''}
+        ${r.senzaData.length ? `<h4>Giustificazioni senza data leggibile</h4><ul class="list">${r.senzaData.map(g => `<li><span class="name">${esc(g.nome)}</span><span class="det">${TIPO_LABEL[g.tipo]} · la data è tagliata nel PDF</span><span class="stato"><span class="badge b-warn">Da controllare</span></span></li>`).join('')}</ul>` : ''}
+        ${r.codiciX ? `<p class="tutti">${r.codiciX} studenti segnati "X" nella colonna del giorno (non conteggiati).</p>` : ''}
+      </div></div>`;
+  }
+  $('out').innerHTML = html;
+  $('out').querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click', async () => {
+    const r = reports.find(x => x.classe === b.dataset.copy);
+    try { await navigator.clipboard.writeText(testoClasse(r, data.date)); b.textContent = 'Copiato ✓'; }
+    catch { b.textContent = 'Copia non riuscita'; }
+    setTimeout(() => { b.textContent = 'Copia testo'; }, 1500);
+  }));
+}
+
+async function load(file) {
+  $('fname').textContent = 'Lettura…';
+  try { const data = parseAppello(await readPdf(file)); $('fname').textContent = file.name; render(data); }
+  catch (e) { $('fname').textContent = 'Errore: ' + e.message; }
+}
+const drop = $('drop');
+$('inPdf').addEventListener('change', e => e.target.files[0] && load(e.target.files[0]));
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); e.dataTransfer.files[0] && load(e.dataTransfer.files[0]); });
+</script>
+</body>
+</html>
