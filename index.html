@@ -23,13 +23,16 @@ body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 syst
 header { padding: 20px 24px 8px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; }
 h1 { font-size: 22px; margin: 0; letter-spacing: -.01em; }
 #dayLabel { color: var(--muted); font-size: 15px; }
-main { padding: 0 24px 40px; max-width: 1200px; }
-.drops { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin: 12px 0 16px; }
-.drop { border: 2px dashed var(--line); border-radius: 10px; background: var(--surface); padding: 14px 16px; cursor: pointer; transition: border-color .15s, background .15s; }
+main { padding: 0 24px 40px; }
+#results { max-width: 1200px; }
+.drops { display: flex; flex-direction: column; gap: 14px; margin: 12px 0 18px; }
+.drop { display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; width: 100%; min-height: 150px; border: 2px dashed var(--line); border-radius: 12px; background: var(--surface); padding: 24px 20px; cursor: pointer; transition: border-color .15s, background .15s; }
 .drop:hover, .drop.over { border-color: var(--accent); background: var(--accent-soft); }
-.drop b { display: block; font-size: 15px; }
-.drop small { color: var(--muted); }
-.drop .fname { margin-top: 6px; font-size: 13px; color: var(--accent); font-weight: 600; min-height: 1.2em; word-break: break-all; }
+.drop.optional { opacity: .55; }
+.drop.optional:hover, .drop.optional.over, .drop.optional.loaded { opacity: 1; }
+.drop b { display: block; font-size: 20px; margin-bottom: 4px; }
+.drop small { color: var(--muted); font-size: 14px; }
+.drop .fname { margin-top: 10px; font-size: 15px; color: var(--accent); font-weight: 600; min-height: 1.2em; word-break: break-all; }
 .drop input { display: none; }
 #msg { margin: 0 0 12px; padding: 10px 14px; border-radius: 8px; background: var(--info-bg); color: var(--info); display: none; }
 #msg.err { background: var(--err-bg); color: var(--err); }
@@ -105,7 +108,7 @@ tr.row-ok td { color: var(--muted); }
       <div class="fname" id="namePlan"></div>
       <input type="file" id="inPlan" accept=".xlsx,.xlsm,.xls,.csv" multiple>
     </label>
-    <label class="drop" id="dropAule">
+    <label class="drop optional" id="dropAule">
       <b>3 · Piano aule (gestionale)</b>
       <small>Il file PianoAule.xls del giorno, facoltativo</small>
       <div class="fname" id="nameAule"></div>
@@ -598,7 +601,7 @@ setupDrop('dropAule', 'inAule', async files => {
     const s0 = XLSX.utils.decode_range(ws['!ref'] ?? 'A1').s, spans = {};
     for (const m of ws['!merges'] ?? []) spans[`${m.s.r - s0.r},${m.s.c - s0.c}`] = m.e.c - m.s.c + 1;
     state.aule = parsePianoAule(XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' }), spans);
-    $('nameAule').textContent = f.name; showMsg(''); render();
+    $('nameAule').textContent = f.name; $('dropAule').classList.add('loaded'); showMsg(''); render();
   } catch (e) { showMsg('Piano aule: ' + e.message, true); }
 });
 
@@ -669,7 +672,7 @@ function renderConfronto(res, dataTxt, col) {
     const n = c.righe.filter(isIssue).length;
     html += `<div class="card"><h3>${esc(c.classe)} <span class="count">${n ? `${n} anomali${n === 1 ? 'a' : 'e'}` : 'tutto ok'}</span></h3>
       <div class="table-wrap"><table><colgroup><col class="c-ora"><col>${col.aule ? '<col>' : ''}${col.registro ? '<col>' : ''}<col class="c-esito"></colgroup>
-      <thead><tr><th>Ora</th><th>Pianificato</th>${col.aule ? '<th>Piano aule</th>' : ''}${col.registro ? '<th>Firmato sul registro</th>' : ''}<th>Esito</th></tr></thead>
+      <thead><tr><th>Ora</th><th>Pianificato</th>${col.aule ? '<th>Piano aule</th>' : ''}${col.registro ? '<th>Firmato su Spaggiari</th>' : ''}<th>Esito</th></tr></thead>
       <tbody>${righe.map(r => riga(r, col)).join('')}</tbody></table></div></div>`;
   }
   if (only && classiOk.length) html = `<p class="okline">Senza anomalie: ${classiOk.map(c => esc(c.classe)).join(', ')}</p>` + html;
