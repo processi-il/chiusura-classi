@@ -155,7 +155,7 @@ tr.row-ok td { color: var(--muted); }
 /*CORE-START*/
 const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
 const MESI = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
-const TIPI = ['Attività di laboratorio', 'Compresenza', 'Supplenza', 'Lezione', 'Spiegazione', 'Verifica', 'Esercitazione', 'Interrogazione'];
+const TIPI = ['Alternanza scuola lavoro protetta', 'Attività di laboratorio', 'Compresenza', 'Supplenza', 'Lezione', 'Spiegazione', 'Verifica', 'Esercitazione', 'Interrogazione'];
 
 const norm = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 const normCode = s => String(s ?? '').toUpperCase().replace(/\s+/g, '');
@@ -315,6 +315,8 @@ function simili(a, b) {
   let k = 0; while (k < s.length && s[k] === l[k]) k++;
   return s.length >= 6 && k >= s.length - 1;
 }
+// ore di Alternanza scuola lavoro protetta: disciplina "AP. ..." o codice "AP." / "A.P."
+const isAP = p => /^A\.?P\./.test(p.code ?? '') || /^A\s*[.-]?\s*P\s*\./i.test(p.disciplina ?? '');
 function materiaOk(firmata, p, aliases) {
   const f = norm(firmata), d = norm(p.disciplina);
   if (!d) return null; // disciplina sconosciuta
@@ -418,6 +420,9 @@ function confronta(registro, plan, strutt, date, aliases, aule = null) {
           if (best.p.sconosciuto) esiti.push('codice-sconosciuto');
           if (best.d === false) esiti.push('docente');
           if (best.m === false) esiti.push('materia');
+          const firmataAP = s.tipo === 'Alternanza scuola lavoro protetta';
+          if (isAP(best.p) && !firmataAP) esiti.push('tipo-ap');
+          if (!isAP(best.p) && firmataAP) esiti.push('tipo-non-ap');
           if (!esiti.length) esiti.push('ok');
         }
         if (s.tipo === 'Supplenza') esiti.push('supplenza');
@@ -513,6 +518,8 @@ const ESITI = {
   'registro-assente': ['Registro della classe assente nel PDF', 'b-err'],
   'non-pianificata': ['Firma non pianificata', 'b-err'],
   'compresenza': ['Compresenza non pianificata', 'b-info'],
+  'tipo-ap': ['Ora AP non firmata come Alternanza', 'b-warn'],
+  'tipo-non-ap': ['Firmata come Alternanza ma non è AP', 'b-warn'],
   'supplenza': ['Supplenza', 'b-sub'],
   'codice-sconosciuto': ['Codice non presente in struttura', 'b-info'],
   'aule-mancante': ['Non presente nel piano aule', 'b-err'],
