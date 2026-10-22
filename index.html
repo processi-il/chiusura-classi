@@ -660,9 +660,11 @@ function renderConfronto(res, dataTxt, col) {
   const isIssue = r => !(r.esiti.length === 1 && r.esiti[0] === 'ok');
   const conteggi = {};
   for (const c of res.classi) for (const r of c.righe) for (const e of r.esiti) conteggi[e] = (conteggi[e] ?? 0) + 1;
-  const classiOk = res.classi.filter(c => !c.righe.some(isIssue));
+  // le classi senza lezione quel giorno (vuote in pianificazione e su Spaggiari) non vanno tra quelle "senza anomalie"
+  const classiConLezione = res.classi.filter(c => c.righe.length);
+  const classiOk = classiConLezione.filter(c => !c.righe.some(isIssue));
   $('summary').innerHTML = [
-    `<span class="chip"><b>${res.classi.length}</b> classi confrontate</span>`,
+    `<span class="chip"><b>${classiConLezione.length}</b> classi confrontate</span>`,
     ...Object.keys(ESITI).filter(k => conteggi[k]).map(k => `<span class="chip"><span class="badge ${ESITI[k][1]}">${ESITI[k][0]}</span> <b>${conteggi[k]}</b></span>`),
   ].join('');
   $('ptConfronto').textContent = `Confronto ${[col.registro && 'registro', 'pianificazione', col.aule && 'piano aule'].filter(Boolean).join(' / ')} — ${dataTxt}`;
