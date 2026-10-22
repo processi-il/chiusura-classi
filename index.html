@@ -317,10 +317,17 @@ function simili(a, b) {
 }
 // ore di Alternanza scuola lavoro protetta: disciplina "AP. ..." o codice "AP." / "A.P."
 const isAP = p => /^A\.?P\./.test(p.code ?? '') || /^A\s*[.-]?\s*P\s*\./i.test(p.disciplina ?? '');
-function materiaOk(firmata, p, aliases) {
+// quanto il nome firmato f somiglia alla materia x: 3 uguale, 2 troncato da Spaggiari, 1 simile, 0 diverso
+const rango = (f, x) => !f || !x ? 0 : f === x ? 3 : x.startsWith(f) ? 2 : simili(f, x) ? 1 : 0;
+// discipline: nomi di tutte le materie della struttura. Se un'altra materia somiglia al nome firmato
+// più di quella pianificata, è quella: "CUCINA" non è "TEORIA DI CUCINA", "MATEMATICA" non è "MATEMATICA FINANZIARIA"
+function materiaOk(firmata, p, aliases, discipline = []) {
   const f = norm(firmata), d = norm(p.disciplina);
   if (!d) return null; // disciplina sconosciuta
-  return simili(f, d) || simili(normMateria(firmata), normMateria(p.disciplina)) || aliases.has(`m|${f}|${d}`);
+  if (aliases.has(`m|${f}|${d}`)) return true;
+  const r = x => Math.max(rango(f, norm(x)), rango(normMateria(firmata), normMateria(x)));
+  const rd = r(p.disciplina);
+  return rd > 0 && !discipline.some(x => norm(x) !== d && r(x) > rd);
 }
 function docenteOk(firmato, p, aliases) {
   const f = norm(firmato), d = norm(p.docente);
@@ -385,6 +392,7 @@ function confronta(registro, plan, strutt, date, aliases, aule = null) {
   const regs = registro?.registers ?? [];
   const regByClass = Object.fromEntries(regs.map(r => [r.classe, r]));
   const classi = plan.classi.filter(c => day[c] || regByClass[c] || aule?.[c]);
+  const discipline = [...new Set(Object.values(strutt.global).map(i => i.disciplina).filter(Boolean))];
   const ignorate = [...new Set([...regs.map(r => r.classe), ...Object.keys(aule ?? {})])].filter(c => !plan.classi.includes(c));
   const out = [];
   for (const classe of classi) {
@@ -409,7 +417,7 @@ function confronta(registro, plan, strutt, date, aliases, aule = null) {
         let best = null, bestScore = -1;
         P.forEach((p, i) => {
           if (usate.has(i)) return;
-          const m = materiaOk(s.materia, p, aliases), d = docenteOk(s.docente, p, aliases);
+          const m = materiaOk(s.materia, p, aliases, discipline), d = docenteOk(s.docente, p, aliases);
           const score = (d ? 2 : 0) + (m ? 1 : 0);
           if (score > bestScore) { best = { i, p, m, d }; bestScore = score; }
         });
@@ -429,7 +437,7 @@ function confronta(registro, plan, strutt, date, aliases, aule = null) {
         righe.push({ ora, p: best?.p ?? null, s, esiti });
       }
       P.forEach((p, i) => { if (!usate.has(i)) righe.push({ ora, p, s: null, esiti: registro ? [reg ? 'mancante' : 'registro-assente'] : [] }); });
-      if (aule) confrontaAule(righe, inizio, ora, celle[ora], aliases);
+      if (aule) confrontaAule(righe, inizio, ora, celle[ora], aliases, discipline);
       for (const r of righe.slice(inizio)) if (!r.esiti.length) r.esiti.push('ok');
     }
     out.push({ classe, presente: !!reg, righe });
@@ -438,7 +446,7 @@ function confronta(registro, plan, strutt, date, aliases, aule = null) {
 }
 
 // abbina le righe di un'ora (pianificato / firmato) ai docenti della cella del piano aule
-function confrontaAule(righe, inizio, ora, cella, aliases) {
+function confrontaAule(righe, inizio, ora, cella, aliases, discipline) {
   const usati = new Set();
   const docOk = (a, rif) => rif && (nomeOk(a, rif) || aliases.has(`d|${norm(a)}|${norm(rif)}`));
   const segna = (r, e) => { r.esiti = r.esiti.filter(x => x !== 'ok'); r.esiti.push(e); };
@@ -453,7 +461,7 @@ function confrontaAule(righe, inizio, ora, cella, aliases) {
     r.a = { aula: cella.aula, materia: cella.materia, docente: cella.docenti[k] };
     if (docDiverso) segna(r, 'aule-docente');
     const disc = r.p?.disciplina || r.s?.materia;
-    if (disc && cella.materia && materiaOk(cella.materia, { disciplina: disc }, aliases) === false) segna(r, 'aule-materia');
+    if (disc && cella.materia && materiaOk(cella.materia, { disciplina: disc }, aliases, discipline) === false) segna(r, 'aule-materia');
   }
   // cella che nessuna riga ha usato: lezione presente solo nel piano aule.
   // I docenti in più di una cella usata (sostegno, compresenza) si controllano con i sostegni.
