@@ -5,94 +5,98 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Assenze e ritardi</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700;900&display=swap">
+<link rel="stylesheet" href="il-kit.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
 <style>
-:root {
-  --bg: #f6f5f1; --surface: #ffffff; --ink: #1d1d1b; --muted: #6b6a63; --line: #e3e1d9;
-  --accent: #2f5d50; --accent-soft: #e4eee9;
-  --ok: #2e7d4f; --ok-bg: #e6f3eb;
-  --warn: #a35b00; --warn-bg: #fdf0dc;
-  --err: #b3261e; --err-bg: #fbe7e5;
-  --info: #3d5a80; --info-bg: #e7edf5;
-}
-* { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-header { padding: 20px 24px 8px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; }
-h1 { font-size: 22px; margin: 0; }
-#dayLabel { color: var(--muted); font-size: 15px; }
-main { padding: 0 24px 40px; max-width: 1100px; }
-.drop { display: block; border: 2px dashed var(--line); border-radius: 10px; background: var(--surface); padding: 14px 16px; cursor: pointer; margin: 12px 0 16px; max-width: 520px; }
-.drop:hover, .drop.over { border-color: var(--accent); background: var(--accent-soft); }
-.drop b { display: block; font-size: 15px; }
-.drop small { color: var(--muted); }
-.drop .fname { margin-top: 6px; font-size: 13px; color: var(--accent); font-weight: 600; }
-.drop input { display: none; }
-.toolbar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin-bottom: 12px; }
-.btn { border: 1px solid var(--accent); background: var(--surface); color: var(--accent); border-radius: 6px; padding: 5px 12px; font: inherit; font-weight: 600; cursor: pointer; }
-.btn.mini { padding: 1px 8px; font-size: 12px; }
-select { font: inherit; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--line); }
-.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 12px; overflow: hidden; }
-.card h3 { margin: 0; padding: 10px 14px; font-size: 17px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; border-bottom: 1px solid var(--line); background: #fbfaf7; }
-.card h3 .sp { flex: 1; }
-.body { padding: 10px 14px 12px; }
-.body h4 { margin: 10px 0 4px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
-.body h4:first-child { margin-top: 0; }
-ul.list { margin: 0; padding: 0; list-style: none; }
-ul.list li { padding: 6px 0; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) 170px; gap: 2px 14px; align-items: center; }
+/* stili della pagina, sopra il kit IL (il-kit.css) */
+main { padding-block: 22px 60px; }
+.pg-head .il { display: inline-flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); border-radius: var(--r-s); padding: 4px 8px 4px 4px; transition: background-color var(--t); }
+.pg-head .il:hover { background: var(--surface-2); }
+.pg-head .il img { height: 32px; width: auto; border-radius: 8px; }
+
+.drop { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 4px; text-align: center; min-height: 150px; padding: 22px 20px; margin-bottom: 20px; border: 1.5px dashed color-mix(in srgb, var(--accent) 35%, var(--border)); border-radius: var(--r); background: var(--surface); cursor: pointer; transition: background-color var(--t), border-color var(--t), transform var(--t); }
+.drop:hover, .drop.over { border-color: var(--accent); background: var(--mint); transform: translateY(-1px); }
+.drop:hover .ico, .drop.over .ico { transform: scale(1.08) rotate(-4deg); }
+.drop:active { transform: scale(.97); }
+.drop:focus-within { outline: 3px solid var(--ring); outline-offset: 2px; }
+.drop.loaded { border-style: solid; border-color: var(--card-line); }
+.drop .ico { margin-bottom: 6px; }
+.drop b { font-size: 18px; }
+.drop small { color: var(--muted); font-size: 14px; }
+.drop .fname { margin-top: 6px; font-size: 15px; color: var(--accent-t); font-weight: 700; min-height: 1.4em; word-break: break-all; }
+
+.kpis { margin-bottom: 14px; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.toolbar .note { flex: 1 1 320px; max-width: 68ch; }
+#out > .acc-item, #out > .card { margin-bottom: 16px; }
+.acc-item > summary { color: var(--accent-t); }
+.acc-item .in { padding: 0; overflow-x: auto; }
+.overview { width: 100%; border-collapse: collapse; font-size: 14px; }
+.overview th, .overview td { padding: 8px 18px; border-top: 1px solid var(--e-line); text-align: left; }
+.overview th { font-size: 11px; text-transform: uppercase; letter-spacing: .09em; color: var(--muted); font-weight: 700; }
+.overview td.n { font-variant-numeric: tabular-nums; }
+.overview tbody tr { transition: background-color var(--t); }
+.overview tbody tr:hover { background: var(--mint); }
+
+.card .h { flex-wrap: wrap; align-items: center; margin-bottom: 4px; }
+.card .h .sp { flex: 1; }
+.nums { display: flex; gap: 6px; flex-wrap: wrap; }
+ul.righe { margin: 0; padding: 0; list-style: none; }
+ul.righe li { padding: 9px 0; border-top: 1px solid var(--e-line); display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) 170px; gap: 2px 14px; align-items: center; font-size: 15px; }
+ul.righe li:first-child { border-top: 0; }
 .stato { text-align: right; }
 .stato .badge { min-width: 150px; text-align: center; }
-.stato .nota { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; }
-ul.list li:last-child { border-bottom: 0; }
-.name { font-weight: 600; }
+.stato .nota { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
+.name { font-weight: 700; }
 .det { color: var(--muted); font-size: 13px; }
-.badge { display: inline-block; border-radius: 4px; padding: 1px 7px; font-size: 12px; font-weight: 700; white-space: nowrap; }
-.b-ok { background: var(--ok-bg); color: var(--ok); }
-.b-warn { background: var(--warn-bg); color: var(--warn); }
-.b-err { background: var(--err-bg); color: var(--err); }
-.b-info { background: var(--info-bg); color: var(--info); }
-.nums { display: flex; gap: 6px; flex-wrap: wrap; font-size: 13px; font-weight: 500; }
-.tutti { color: var(--muted); font-size: 13px; }
-.riepilogo { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 16px; overflow: hidden; }
-.riepilogo summary { padding: 9px 14px; font-weight: 600; cursor: pointer; color: var(--accent); }
-.riepilogo[open] summary { border-bottom: 1px solid var(--line); }
-.overview { width: 100%; border-collapse: collapse; }
-.overview th, .overview td { padding: 6px 10px; border-bottom: 1px solid var(--line); text-align: left; }
-.overview th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
-.overview td.n { font-variant-numeric: tabular-nums; }
-.overview a { color: var(--accent); font-weight: 700; text-decoration: none; }
-.legend { font-size: 13px; color: var(--muted); margin: 0 0 14px; }
+.badge { display: inline-block; border-radius: 999px; padding: 2px 9px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.b-ok { background: color-mix(in srgb, var(--G) 18%, transparent); color: var(--G-t); }
+.b-warn { background: color-mix(in srgb, var(--O) 16%, transparent); color: var(--O-t); }
+.b-err { background: color-mix(in srgb, var(--R) 14%, transparent); color: var(--R-t); }
+.b-info { background: color-mix(in srgb, var(--B) 14%, transparent); color: var(--B-t); }
+.tutti { color: var(--muted); font-size: 14px; }
 .hidden { display: none !important; }
 @media (max-width: 640px) {
-  header, main { padding-left: 16px; padding-right: 16px; }
-  ul.list li { grid-template-columns: minmax(0, 1fr) auto; }
-  ul.list li .det { grid-column: 1; grid-row: 2; }
-  ul.list li .stato { grid-column: 2; grid-row: 1 / span 2; }
+  ul.righe li { grid-template-columns: minmax(0, 1fr) auto; }
+  ul.righe li .det { grid-column: 1; grid-row: 2; }
+  ul.righe li .stato { grid-column: 2; grid-row: 1 / span 2; }
   .stato .badge { min-width: 0; }
 }
 @media print {
+  :root, :root:not([data-theme="light"]) { color-scheme: light; --bg: #fff; --surface: #fff; --fg: #000; --muted: #444; --e-line: #bbb;
+    --R-t: #B71928; --O-t: #B0480F; --G-t: #4A7A14; --B-t: #00699A; }
   body { background: #fff; font-size: 12px; }
-  header, .drop, .toolbar, .riepilogo, .legend, .no-print { display: none !important; }
-  main { padding: 0; max-width: none; }
-  .card { border: 0; border-radius: 0; margin: 0; page-break-after: always; }
-  .card h3 { background: none; border-bottom: 2px solid #000; font-size: 18px; padding: 0 0 6px; }
-  .card h3::after { content: attr(data-date); font-size: 13px; font-weight: 400; margin-left: auto; }
-  .body { padding: 8px 0; }
+  .pg-head, .drop, .kpis, .toolbar, .acc-item, .no-print { display: none !important; }
+  main { padding: 0; }
+  .wrap { max-width: none; }
+  .card { border: 0; border-radius: 0; margin: 0; padding: 0; page-break-after: always; }
+  .card .h { border-bottom: 2px solid #000; font-size: 18px; padding: 0 0 6px; }
+  .card .h::after { content: attr(data-date); font-size: 13px; font-weight: 400; margin-left: auto; }
+  ul.righe li { font-size: 12px; padding: 5px 0; }
   .badge { border: 1px solid currentColor; }
 }
 </style>
 </head>
 <body>
-<header>
-  <h1>Assenze e ritardi</h1>
-  <span id="dayLabel">Report per i responsabili di classe — prova</span>
-</header>
-<main>
+<main class="wrap gut">
+  <header class="pg-head">
+    <div>
+      <div class="eyebrow">Report per i responsabili di classe · prova</div>
+      <h1>Assenze e <b>ritardi</b></h1>
+      <p class="sub" id="dayLabel">Carica il registro del giorno</p>
+    </div>
+    <a class="il" href="https://www.immaginazioneelavoro.it" target="_blank" rel="noopener"><img src="il-logo.png" alt="">Immaginazione e Lavoro</a>
+  </header>
   <label class="drop" id="drop">
+    <span class="ico c-B"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"/><path d="M14 3v5h5"/></svg></span>
     <b>Registro ClasseViva (PDF)</b>
     <small>Trascina qui il PDF della giornata o clicca per sceglierlo</small>
-    <div class="fname" id="fname"></div>
-    <input type="file" id="inPdf" accept=".pdf">
+    <span class="fname" id="fname"></span>
+    <input type="file" id="inPdf" accept=".pdf" class="sr-only">
   </label>
   <div id="out"></div>
 </main>
@@ -253,29 +257,33 @@ function render(data) {
   $('dayLabel').textContent = `${fmtLong(data.date)} · ${reports.length} classi`;
   const tot = k => reports.reduce((s, r) => s + r[k].length, 0);
   const daG = reports.reduce((s, r) => s + [...r.assenze, ...r.ritardi].filter(e => e.daGiustificare).length, 0);
-  let html = `<div class="toolbar">
-      <span><b>${tot('assenze')}</b> assenti · <b>${tot('ritardi')}</b> ritardi/uscite · <b>${daG}</b> da giustificare</span>
-      <button class="btn" onclick="window.print()">Stampa (una pagina per classe)</button>
+  let html = `<div class="kpis">
+      <div class="kpi"><b>${tot('assenze')}</b><span>assenti</span></div>
+      <div class="kpi"><b>${tot('ritardi')}</b><span>ritardi e uscite</span></div>
+      <div class="kpi"><b class="${daG ? 't-R' : ''}">${daG}</b><span>da giustificare</span></div>
     </div>
-    <p class="legend">"Giustificato" = sul registro c'è la giustificazione di oggi. Il PDF di un solo giorno non mostra le assenze ancora aperte dei giorni passati: in fondo a ogni classe trovi le giustificazioni consegnate oggi per giorni precedenti.</p>
-    <details class="riepilogo"><summary>Riepilogo per classe</summary>
-    <table class="overview"><thead><tr><th>Classe</th><th>Assenti</th><th>Ritardi / uscite</th><th>Da giustificare</th><th>Giust. giorni prec.</th></tr></thead><tbody>
+    <div class="toolbar">
+      <p class="note">"Giustificato" = sul registro c'è la giustificazione di oggi. Il PDF di un solo giorno non mostra le assenze ancora aperte dei giorni passati: in fondo a ogni classe trovi le giustificazioni consegnate oggi per giorni precedenti.</p>
+      <button type="button" class="btn btn-g btn-s" onclick="window.print()"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>Stampa (una pagina per classe)</button>
+    </div>
+    <details class="acc-item"><summary>Riepilogo per classe<svg class="i chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary>
+    <div class="in"><table class="overview"><thead><tr><th>Classe</th><th>Assenti</th><th>Ritardi / uscite</th><th>Da giustificare</th><th>Giust. giorni prec.</th></tr></thead><tbody>
     ${reports.map(r => {
       const dg = [...r.assenze, ...r.ritardi].filter(e => e.daGiustificare).length;
-      return `<tr><td><a href="#cl-${esc(r.classe)}">${esc(r.classe)}</a></td><td class="n">${r.assenze.length}</td><td class="n">${r.ritardi.length}</td>
+      return `<tr><td><a class="lnk" href="#cl-${esc(r.classe)}">${esc(r.classe)}</a></td><td class="n">${r.assenze.length}</td><td class="n">${r.ritardi.length}</td>
         <td class="n">${dg ? `<span class="badge b-err">${dg}</span>` : '0'}</td><td class="n">${r.precedenti.length}</td></tr>`;
-    }).join('')}</tbody></table></details>`;
+    }).join('')}</tbody></table></div></details>`;
 
   for (const r of reports) {
     const li = e => `<li><span class="name">${esc(e.nome)}</span><span class="det">${e.tipo !== 'assenza' ? esc(e.tipo) + (e.dettaglio ? ' · ' + esc(e.dettaglio) : '') : ''}</span>${stato(e)}</li>`;
-    html += `<div class="card" id="cl-${esc(r.classe)}"><h3 data-date="${fmtLong(data.date)}">Classe ${esc(r.classe)}
+    html += `<div class="card" id="cl-${esc(r.classe)}"><h3 class="h" data-date="${fmtLong(data.date)}">Classe ${esc(r.classe)}
         <span class="nums"><span class="badge b-info">${r.assenze.length} assenti</span><span class="badge b-warn">${r.ritardi.length} ritardi/uscite</span></span>
-        <span class="sp"></span><button class="btn mini no-print" data-copy="${esc(r.classe)}">Copia testo</button></h3>
-      <div class="body">
-        <h4>Assenti</h4>${r.assenze.length ? `<ul class="list">${r.assenze.map(li).join('')}</ul>` : '<div class="tutti">Nessun assente</div>'}
-        <h4>Ritardi e uscite anticipate</h4>${r.ritardi.length ? `<ul class="list">${r.ritardi.map(li).join('')}</ul>` : '<div class="tutti">Nessuno</div>'}
-        ${r.precedenti.length ? `<h4>Giustificazioni consegnate oggi per giorni precedenti</h4><ul class="list">${r.precedenti.map(g => `<li><span class="name">${esc(g.nome)}</span><span class="det">${TIPO_LABEL[g.tipo]} del ${fmtDate(g.data)}</span><span class="stato"><span class="badge b-ok">Giustificata</span></span></li>`).join('')}</ul>` : ''}
-        ${r.senzaData.length ? `<h4>Giustificazioni senza data leggibile</h4><ul class="list">${r.senzaData.map(g => `<li><span class="name">${esc(g.nome)}</span><span class="det">${TIPO_LABEL[g.tipo]} · la data è tagliata nel PDF</span><span class="stato"><span class="badge b-warn">Da controllare</span></span></li>`).join('')}</ul>` : ''}
+        <span class="sp"></span><button type="button" class="btn btn-g btn-s no-print" data-copy="${esc(r.classe)}">Copia testo</button></h3>
+      <div>
+        <h4 class="sub-h">Assenti</h4>${r.assenze.length ? `<ul class="righe">${r.assenze.map(li).join('')}</ul>` : '<div class="tutti">Nessun assente</div>'}
+        <h4 class="sub-h">Ritardi e uscite anticipate</h4>${r.ritardi.length ? `<ul class="righe">${r.ritardi.map(li).join('')}</ul>` : '<div class="tutti">Nessuno</div>'}
+        ${r.precedenti.length ? `<h4 class="sub-h">Giustificazioni consegnate oggi per giorni precedenti</h4><ul class="righe">${r.precedenti.map(g => `<li><span class="name">${esc(g.nome)}</span><span class="det">${TIPO_LABEL[g.tipo]} del ${fmtDate(g.data)}</span><span class="stato"><span class="badge b-ok">Giustificata</span></span></li>`).join('')}</ul>` : ''}
+        ${r.senzaData.length ? `<h4 class="sub-h">Giustificazioni senza data leggibile</h4><ul class="righe">${r.senzaData.map(g => `<li><span class="name">${esc(g.nome)}</span><span class="det">${TIPO_LABEL[g.tipo]} · la data è tagliata nel PDF</span><span class="stato"><span class="badge b-warn">Da controllare</span></span></li>`).join('')}</ul>` : ''}
         ${r.codiciX ? `<p class="tutti">${r.codiciX} studenti segnati "X" nella colonna del giorno (non conteggiati).</p>` : ''}
       </div></div>`;
   }
@@ -290,7 +298,7 @@ function render(data) {
 
 async function load(file) {
   $('fname').textContent = 'Lettura…';
-  try { const data = parseAppello(await readPdf(file)); $('fname').textContent = file.name; render(data); }
+  try { const data = parseAppello(await readPdf(file)); $('fname').textContent = file.name; drop.classList.add('loaded'); render(data); }
   catch (e) { $('fname').textContent = 'Errore: ' + e.message; }
 }
 const drop = $('drop');
