@@ -176,7 +176,7 @@ tr.row-ok td { color: var(--muted); }
 /*CORE-START*/
 const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
 const MESI = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
-const TIPI = ['Alternanza scuola lavoro protetta', 'Attività di laboratorio', 'Compresenza', 'Supplenza', 'Lezione', 'Spiegazione', 'Verifica', 'Esercitazione', 'Interrogazione'];
+const TIPI = ['Alternanza scuola lavoro protetta', 'Attività di laboratorio', 'Compresenza', 'Supplenza', 'Lezione', 'Spiegazione', 'Verifica', 'Esercitazione', 'Interrogazione', 'Aula in Presenza'];
 
 const norm = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 const normCode = s => String(s ?? '').toUpperCase().replace(/\s+/g, '');
@@ -245,6 +245,8 @@ function parseRegistro(pages) {
 }
 
 const isSostegno = e => norm(e.materia).startsWith('SOSTEGNO');
+// firma messa ma colonna Argomenti vuota (o con il solo tipo di lezione)
+const senzaArgomento = e => !e.argomento.trim();
 
 // ---------- Pianificazione (foglio 1) ----------
 function cellDate(v) {
@@ -452,8 +454,9 @@ function confronta(registro, plan, strutt, date, aliases, aule = null) {
           const firmataAP = s.tipo === 'Alternanza scuola lavoro protetta';
           if (isAP(best.p) && !firmataAP) esiti.push('tipo-ap');
           if (!isAP(best.p) && firmataAP) esiti.push('tipo-non-ap');
-          if (!esiti.length) esiti.push('ok');
         }
+        if (senzaArgomento(s)) esiti.push('senza-argomento');
+        if (!esiti.length) esiti.push('ok');
         if (s.tipo === 'Supplenza') esiti.push('supplenza');
         righe.push({ ora, p: best?.p ?? null, s, esiti });
       }
@@ -463,7 +466,10 @@ function confronta(registro, plan, strutt, date, aliases, aule = null) {
     }
     out.push({ classe, presente: !!reg, righe });
   }
-  return { date, classi: out, ignorate };
+  // le classi non confrontate non hanno righe: le ore senza argomento si elencano a parte
+  const senzaArgIgnorate = regs.filter(r => ignorate.includes(r.classe))
+    .flatMap(r => r.entries.filter(e => !isSostegno(e) && senzaArgomento(e)).map(e => ({ classe: r.classe, ...e })));
+  return { date, classi: out, ignorate, senzaArgIgnorate };
 }
 
 // abbina le righe di un'ora (pianificato / firmato) ai docenti della cella del piano aule
@@ -549,6 +555,7 @@ const ESITI = {
   'compresenza': ['Compresenza non pianificata', 'b-info'],
   'tipo-ap': ['Ora AP non firmata come Alternanza', 'b-warn'],
   'tipo-non-ap': ['Firmata come Alternanza ma non è AP', 'b-warn'],
+  'senza-argomento': ['Firmata senza argomento', 'b-err'],
   'supplenza': ['Supplenza', 'b-sub'],
   'codice-sconosciuto': ['Codice non presente in struttura', 'b-info'],
   'aule-mancante': ['Non presente nel piano aule', 'b-err'],
@@ -730,6 +737,7 @@ function renderConfronto(res, dataTxt, col) {
       <tbody>${righe.map(r => riga(r, col)).join('')}</tbody></table></div></div>`;
   }
   if (only && classiOk.length) html = callout(`Senza anomalie: ${classiOk.map(c => c.classe).join(', ')}`, 'ok') + html;
+  if (res.senzaArgIgnorate.length) html += callout(`Firmate senza argomento nelle classi non confrontate: ${res.senzaArgIgnorate.map(e => `${e.classe} ora ${fmtOre(e.ora, e.ore)} (${e.materia} · ${e.docente})`).join('; ')}`, true);
   if (res.ignorate.length) html += `<p class="note">Non confrontate (assenti nella pianificazione): ${res.ignorate.map(esc).join(', ')}</p>`;
   $('confronto').innerHTML = html || '<p class="empty">Nessuna ora da confrontare per questo giorno.</p>';
   $('confronto').querySelectorAll('[data-alias]').forEach(b => b.addEventListener('click', () => {
@@ -752,6 +760,8 @@ function renderSostegni(registro, dataTxt, aule) {
       </tbody></table></div></div>`;
     else html += callout('Tutti i sostegni previsti nel piano aule risultano firmati.', 'ok');
   }
+  const vuoti = list.flatMap(c => c.righe.filter(senzaArgomento).map(r => `${c.classe} ora ${fmtOre(r.ora, r.ore)} (${r.docente})`));
+  if (vuoti.length) html += callout(`Sostegni firmati senza argomento: ${vuoti.join('; ')}`, true);
   if (!list.length) { $('sostegni').innerHTML = html + '<p class="empty">Nessuna ora di sostegno firmata oggi.</p>'; return; }
   const perDocente = {};
   for (const c of list) for (const r of c.righe) {
@@ -768,7 +778,7 @@ function renderSostegni(registro, dataTxt, aule) {
       <div class="table-wrap"><table><colgroup><col class="c-ora"><col class="c-ore"><col style="width:20%"><col style="width:24%"><col><col class="c-check"></colgroup><thead><tr><th>Ora</th><th>Ore</th><th>Docente di sostegno</th><th>In compresenza con</th><th>Argomento</th><th class="check">Cartaceo</th></tr></thead><tbody>
       ${c.righe.map(r => `<tr><td class="ora">${fmtOre(r.ora, r.ore)}</td><td>${r.ore}</td><td><b>${esc(r.docente)}</b><div class="sm">${esc(r.tipo)}</div>${aule ? (([t, cl]) => `<span class="badge ${cl}">${t}</span>`)(PREVISTO[sostegnoPrevisto(r, aule[c.classe])]) : ''}</td>
         <td>${r.conChi.map(x => `${esc(x.materia)} · ${esc(x.docente)}`).join('<br>') || '<span class="sm">—</span>'}</td>
-        <td>${esc(r.argomento)}</td><td class="check"><span class="box"></span></td></tr>`).join('')}
+        <td>${senzaArgomento(r) ? '<span class="badge b-err">Argomento mancante</span>' : esc(r.argomento)}</td><td class="check"><span class="box"></span></td></tr>`).join('')}
       </tbody></table></div></div>`;
   }
   $('sostegni').innerHTML = html;
