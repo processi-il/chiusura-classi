@@ -732,7 +732,7 @@ function render() {
   showMsg(avvisi.join(' '), 'warn');
   const aliases = loadAliases();
   const res = confronta(registro, state.plan, state.strutt, date, aliases, aule);
-  renderConfronto(res, dataTxt, { registro: !!registro, aule: !!aule });
+  renderConfronto(res, dataTxt, { registro: !!registro, aule: !!aule }, new Set(registro ? sovrapposizioni(registro).flatMap(d => d.conflitti.flatMap(c => c.voci.map(v => v.classe))) : []));
   $('confronto').insertAdjacentHTML('afterbegin', htmlSovrapposizioni(registro));
   renderAliases();
   // la festa parte una volta sola per ogni combinazione di file caricati
@@ -832,7 +832,7 @@ function htmlSovrapposizioni(registro) {
     </tbody></table></div></div>`;
 }
 
-function renderConfronto(res, dataTxt, col) {
+function renderConfronto(res, dataTxt, col, classiDoppie = new Set()) {
   const only = $('onlyIssues').checked;
   const isIssue = r => !(r.esiti.length === 1 && r.esiti[0] === 'ok');
   const conteggi = {}, perClasse = {};
@@ -843,7 +843,7 @@ function renderConfronto(res, dataTxt, col) {
   const tip = k => Object.entries(perClasse[k]).map(([c, n]) => n > 1 ? `${c} ×${n}` : c).join(' · ');
   // le classi senza lezione quel giorno (vuote in pianificazione e su Spaggiari) non vanno tra quelle "senza anomalie"
   const classiConLezione = res.classi.filter(c => c.righe.length);
-  const classiOk = classiConLezione.filter(c => !c.righe.some(isIssue));
+  const classiOk = classiConLezione.filter(c => !c.righe.some(isIssue) && !classiDoppie.has(c.classe));
   $('summary').innerHTML = [
     `<div class="kpi"><b>${classiConLezione.length}</b><span>classi confrontate</span></div>`,
     ...Object.keys(ESITI).filter(k => conteggi[k]).map(k => `<div class="kpi"${k === 'ok' ? '' : ` tabindex="0" data-tip="${esc(tip(k))}"`}><b>${conteggi[k]}</b><span><i class="dot ${ESITI[k][1]}"></i>${ESITI[k][0]}</span></div>`),
