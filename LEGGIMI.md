@@ -8,6 +8,7 @@ Controllo di fine giornata: registro ClasseViva confrontato con la pianificazion
 3. Trascina nel riquadro 2 l'Excel della pianificazione. La pagina usa i primi due fogli, l'orario e la struttura dei codici. In alternativa puoi caricare insieme i due CSV.
 4. Facoltativo: trascina nel riquadro 3 il `PianoAule.xls` del giorno scaricato dal gestionale. Nel confronto compare la colonna **Piano aule**.
 5. Tab **Confronto**: elenca solo le anomalie, divise per classe: docente diverso, materia diversa, ora senza firma, firma non pianificata, ora firmata senza argomento, supplenza; con il piano aule anche: non presente nel piano aule, docente o materia diversi nel piano aule, lezione solo nel piano aule.
+   In testa al tab, il riquadro **Firmato in due posti nella stessa ora** elenca i docenti con due firme sovrapposte (due classi diverse, oppure lezione e sostegno), compresenze e supplenze comprese. Se compare, la giornata non è "tutto a posto".
 6. Tab **Sostegni**: riepilogo per docente e dettaglio per classe, con la casella da spuntare sul cartaceo. I sostegni firmati senza argomento sono segnalati in rosso. Si stampa con "Stampa sostegni". Con il piano aule, ogni sostegno firmato dice se era previsto, e in testa ci sono i sostegni previsti nel piano aule ma non firmati.
 7. Se una materia o un docente risultano "diversi" ma in realtà sono la stessa cosa, premi **= materia** / **= docente**: l'equivalenza viene ricordata e la trovi nel tab **Equivalenze**.
 

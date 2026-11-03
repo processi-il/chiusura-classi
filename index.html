@@ -558,6 +558,29 @@ function sostegni(registro) {
   }
   return out;
 }
+
+// stesso docente firmato in due posti nella stessa ora (due classi, o lezione e sostegno): non può essere in due posti insieme.
+// Conta ogni tipo di firma, anche compresenza e supplenza.
+function sovrapposizioni(registro) {
+  const perOra = {};
+  for (const r of registro.registers) for (const e of r.entries) {
+    const k = norm(e.docente);
+    if (!k) continue;
+    for (let o = e.ora; o < e.ora + e.ore; o++) ((perOra[k] ??= {})[o] ??= []).push({ classe: r.classe, e });
+  }
+  const out = [];
+  for (const [k, ore] of Object.entries(perOra)) {
+    const conflitti = [];
+    for (const o of Object.keys(ore).map(Number).sort((a, b) => a - b)) {
+      if (ore[o].length < 2) continue;
+      const prev = conflitti.find(c => c.ora + c.ore === o && c.voci.length === ore[o].length && c.voci.every(v => ore[o].some(w => w.e === v.e)));
+      if (prev) prev.ore++;
+      else conflitti.push({ ora: o, ore: 1, voci: ore[o] });
+    }
+    if (conflitti.length) out.push({ docente: ore[Object.keys(ore)[0]][0].e.docente, conflitti });
+  }
+  return out.sort((a, b) => a.docente.localeCompare(b.docente));
+}
 /*CORE-END*/
 
 // ---------- UI ----------
@@ -704,12 +727,13 @@ function render() {
   const aule = state.aule && state.aule.date === date ? state.aule.classi : null;
   if (state.aule && !aule) avvisi.push(`Il piano aule è del ${fmtDate(state.aule.date)}, il registro del ${dataTxt}: piano aule non confrontato.`);
   renderSostegni(registro, dataTxt, aule);
-  if (!state.plan) { $('confronto').innerHTML = '<p class="empty">Carica anche la pianificazione per vedere il confronto.</p>'; $('summary').innerHTML = ''; renderAliases(); showMsg(avvisi.join(' '), 'warn'); return; }
+  if (!state.plan) { $('confronto').innerHTML = htmlSovrapposizioni(registro) + '<p class="empty">Carica anche la pianificazione per vedere il confronto.</p>'; $('summary').innerHTML = ''; renderAliases(); showMsg(avvisi.join(' '), 'warn'); return; }
   if (!state.plan.days[date]) avvisi.push(`La pianificazione non contiene il giorno ${dataTxt}.`);
   showMsg(avvisi.join(' '), 'warn');
   const aliases = loadAliases();
   const res = confronta(registro, state.plan, state.strutt, date, aliases, aule);
   renderConfronto(res, dataTxt, { registro: !!registro, aule: !!aule });
+  $('confronto').insertAdjacentHTML('afterbegin', htmlSovrapposizioni(registro));
   renderAliases();
   // la festa parte una volta sola per ogni combinazione di file caricati
   const chiave = [state.pdfName, state.planName, aule ? state.aule.date : ''].join('|');
@@ -720,7 +744,7 @@ function render() {
 function giornataPerfetta(res, registro, aule) {
   const errore = e => ['b-err', 'b-warn'].includes(ESITI[e][1]);
   if (res.classi.some(c => c.righe.some(r => r.esiti.some(errore))) || res.senzaArgIgnorate.length) return false;
-  if (sostegni(registro).some(c => c.righe.some(senzaArgomento))) return false;
+  if (sostegni(registro).some(c => c.righe.some(senzaArgomento)) || sovrapposizioni(registro).length) return false;
   return !aule || !sostegniAule(registro, aule, state.plan, state.strutt, registro.date).length;
 }
 
@@ -792,6 +816,20 @@ function riga(r, col) {
   if (a && rif?.docente && r.esiti.includes('aule-docente')) azioni += aliasBtn('d', a.docente, rif.docente, '= docente aule');
   const badges = r.esiti.map(e => `<span class="badge ${ESITI[e][1]}">${ESITI[e][0]}</span>`).join('');
   return `<tr class="${r.esiti.length === 1 && r.esiti[0] === 'ok' ? 'row-ok' : ''}"><td class="ora">${ROMAN[r.ora]}</td><td>${pian}</td>${col.aule ? `<td>${aul}</td>` : ''}${col.registro ? `<td>${firm}</td>` : ''}<td>${badges}${azioni}</td></tr>`;
+}
+
+// riquadro in testa al tab Confronto: docenti firmati in due posti nella stessa ora
+function htmlSovrapposizioni(registro) {
+  const list = registro ? sovrapposizioni(registro) : [];
+  if (!list.length) return '';
+  const n = list.reduce((s, d) => s + d.conflitti.length, 0);
+  return `<div class="card"><h3 class="h">Firmato in due posti nella stessa ora <span class="note">${n} sovrapposizion${n === 1 ? 'e' : 'i'}</span></h3>
+    <div class="table-wrap"><table><colgroup><col class="c-ora"><col style="width:24%"><col><col class="c-esito"></colgroup>
+    <thead><tr><th>Ora</th><th>Docente</th><th>Firme</th><th>Esito</th></tr></thead><tbody>
+    ${list.flatMap(d => d.conflitti.map(c => `<tr><td class="ora">${fmtOre(c.ora, c.ore)}</td><td><b>${esc(d.docente)}</b></td>
+      <td>${c.voci.map(v => `<div><b>${esc(v.classe)}</b> · ${esc(v.e.materia)} <span class="sm">${esc(v.e.tipo)} · ${fmtOre(v.e.ora, v.e.ore)}</span></div>`).join('')}</td>
+      <td><span class="badge b-err">Firma doppia</span></td></tr>`)).join('')}
+    </tbody></table></div></div>`;
 }
 
 function renderConfronto(res, dataTxt, col) {
