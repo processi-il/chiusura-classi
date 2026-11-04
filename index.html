@@ -607,7 +607,16 @@ const ESITI = {
 const ALIAS_KEY = 'chiusura-classi.alias';
 let state = { pdfPages: null, pdfName: '', plan: null, strutt: null, planName: '', aule: null };
 
-function loadAliases() { try { return new Set(JSON.parse(localStorage.getItem(ALIAS_KEY) || '[]')); } catch { return new Set(); } }
+// equivalenze di materia sempre valide (nome firmato = nome in struttura), in entrambi i sensi
+const MATERIE_UGUALI = [
+  ['APCOCKTAIL', 'APMIXOLOGY'],
+  ['COMUNICAZIONE', 'COMUNICAZIONEDIGITALE'],
+  ['MAKEUP', 'MAKEUPCORRETTIVO'],
+  ['PREPARAZIONEEMONITORAGGIOSTAGE', 'PREPEMONITORAGGIOSTAGE'],
+  ['TAVOLAFREDDA', 'TAVFREDDA'],
+];
+const ALIAS_FISSI = MATERIE_UGUALI.flatMap(([a, b]) => [`m|${a}|${b}`, `m|${b}|${a}`]);
+function loadAliases() { try { return new Set([...JSON.parse(localStorage.getItem(ALIAS_KEY) || '[]'), ...ALIAS_FISSI]); } catch { return new Set(ALIAS_FISSI); } }
 function saveAliases(set) { try { localStorage.setItem(ALIAS_KEY, JSON.stringify([...set])); } catch {} }
 
 const ICO_MSG = {
@@ -908,14 +917,14 @@ function renderSostegni(registro, dataTxt, aule) {
 }
 
 function renderAliases() {
-  const set = loadAliases();
+  const set = new Set([...loadAliases()].filter(a => !ALIAS_FISSI.includes(a)));
   if (!set.size) { $('aliasList').innerHTML = '<p class="empty">Nessuna equivalenza salvata.</p>'; return; }
   $('aliasList').innerHTML = '<div class="card"><div class="list aliases" style="padding: 8px 18px">' + [...set].sort().map(a => {
     const [t, f, p] = a.split('|');
     return `<div><span class="tx"><span class="badge b-info">${t === 'm' ? 'materia' : 'docente'}</span> <span class="code">${esc(f)}</span> = <span class="code">${esc(p)}</span></span><button type="button" class="btn btn-d btn-s" data-del="${esc(a)}">Rimuovi</button></div>`;
   }).join('') + '</div></div>';
   $('aliasList').querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => {
-    const s = loadAliases(); s.delete(b.dataset.del); saveAliases(s); render();
+    const s = loadAliases(); s.delete(b.dataset.del); saveAliases([...s].filter(a => !ALIAS_FISSI.includes(a))); render();
   }));
 }
 </script>
