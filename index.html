@@ -217,8 +217,12 @@ function parseRegistro(pages) {
         const mese = MESI.indexOf(m[3].toLowerCase()) + 1;
         if (mese) date = isoDate(m[4], mese, m[2]);
       }
-      cur = { classe, raw, entries: [] };
-      registers.push(cur);
+      // una classe può continuare sulla pagina dopo (es. solo le note) con la stessa intestazione:
+      // resta lo stesso registro, altrimenti quello vuoto sostituirebbe quello con le firme
+      if (cur?.raw !== raw) {
+        cur = { classe, raw, entries: [] };
+        registers.push(cur);
+      }
     }
     if (!cur) continue;
 
